@@ -37,6 +37,9 @@ jobs:
   build-targets:
     needs: prepare-builder
     runs-on: ubuntu-24.04
+    env:
+      PACMAN_REPO_UPLOAD_URL: ${{ secrets.PACMAN_REPO_UPLOAD_URL }}
+      PACMAN_REPO_UPLOAD_TOKEN: ${{ secrets.PACMAN_REPO_UPLOAD_TOKEN }}
     strategy:
       fail-fast: false
       matrix:
@@ -83,10 +86,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload packages to pacman repository
-        if: github.event_name != 'pull_request' && secrets.PACMAN_REPO_UPLOAD_URL != '' && secrets.PACMAN_REPO_UPLOAD_TOKEN != ''
-        env:
-          PACMAN_REPO_UPLOAD_URL: ${{ secrets.PACMAN_REPO_UPLOAD_URL }}
-          PACMAN_REPO_UPLOAD_TOKEN: ${{ secrets.PACMAN_REPO_UPLOAD_TOKEN }}
+        if: github.event_name != 'pull_request' && env.PACMAN_REPO_UPLOAD_URL != '' && env.PACMAN_REPO_UPLOAD_TOKEN != ''
         run: |
           set -euo pipefail
           shopt -s nullglob
