@@ -15,6 +15,19 @@ NDK_ARCHIVE="$PACMAN_ANDROID_VENDOR_DIR/android-ndk-r${NDK_VERSION}-linux.zip"
 NDK_URL="https://dl.google.com/android/repository/android-ndk-r${NDK_VERSION}-linux.zip"
 TOOLCHAIN_BIN="$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
 
+case "$NDK_VERSION" in
+  29)
+    NDK_SHA256="4abbbcdc842f3d4879206e9695d52709603e52dd68d3c1fff04b3b5e7a308ecf"
+    ;;
+  23c)
+    NDK_SHA256="6ce94604b77d28113ecd588d425363624a5228d9662450c48d2e4053f8039242"
+    ;;
+  *)
+    echo "unsupported Android NDK version: $NDK_VERSION" >&2
+    exit 1
+    ;;
+esac
+
 if [[ -x "$TOOLCHAIN_BIN" ]]; then
   printf '%s\n' "$NDK_DIR"
   exit 0
@@ -27,6 +40,8 @@ if [[ ! -f "$NDK_ARCHIVE" ]]; then
     --output "$NDK_ARCHIVE" \
     "$NDK_URL"
 fi
+
+echo "${NDK_SHA256}  ${NDK_ARCHIVE}" | sha256sum --check --status
 
 tmpdir="$(mktemp -d "$PACMAN_ANDROID_VENDOR_DIR/.ndk-extract.XXXXXX")"
 trap 'rm -rf "$tmpdir"' EXIT

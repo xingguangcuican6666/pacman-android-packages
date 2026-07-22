@@ -28,8 +28,8 @@ Each matrix job should:
 
 1. Restore or download the Android NDK.
 2. Resolve target metadata from the repo-local target map.
-3. Compile a smoke binary with the Android NDK clang wrapper for the selected architecture.
-4. Emit artifacts under `out/smoke/<target>/`.
+3. Build a smoke package with the repository-local builder for the selected architecture.
+4. Emit artifacts under `out/packages/<target>/`.
 
 ## Current Target Map
 
@@ -40,9 +40,10 @@ Each matrix job should:
 
 ## Why A Smoke Build First
 
-This repository does not yet have package recipes or a pacman package assembler. The matrix therefore validates the hardest early risk first:
+The repository now has a minimal package recipe and package assembler. The matrix still targets a smoke package because it validates the hardest early risks first:
 
 - Docker container is usable
 - Android NDK is downloadable
 - Target triples are wired correctly
-- All four requested architectures can compile from the same repository contract
+- ALPM package emission works from the same repository contract
+- All four requested architectures can build from the same repository contract

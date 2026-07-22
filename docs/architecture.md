@@ -19,6 +19,8 @@ Build a new pacman-oriented package build system for Android native targets with
   - Per-package recipe, patches, metadata, and tests.
 - `toolchain/`
   - Local logic for SDK/NDK detection, sysroot selection, target triples, compiler wrappers, and environment export.
+- `builder/`
+  - Repository-local package build and ALPM package assembly logic.
 - `docker/`
   - Builder image definition for local development and CI.
 - `.github/workflows/`
@@ -54,7 +56,7 @@ The new system should split into four layers:
    - Update `core.db` and `core.files`.
    - Publish artifacts to the Android repository host.
 
-The first CI implementation should still validate the toolchain before package recipes exist. A smoke build that compiles one Android-native binary per target architecture is sufficient for the first cut.
+The first CI implementation can use a single smoke package recipe to validate the packaging path before real package inventory exists.
 
 ## What We Are Not Reusing Wholesale
 
@@ -69,6 +71,6 @@ The first CI implementation should still validate the toolchain before package r
 2. Add local target descriptions for `x86_64`, `i686`, `armhf`, and `aarch64`.
 3. Define the default package layout contract around `RootDir=/data/adb/pacman`.
 4. Add a reusable Docker builder image.
-5. Add a GitHub Actions matrix that smoke-compiles one Android-native binary for each target.
+5. Add a GitHub Actions matrix that builds one smoke package for each target.
 6. Build one tiny leaf package using the new environment.
 7. Package it as a pacman artifact and upload it to the `core` repo.

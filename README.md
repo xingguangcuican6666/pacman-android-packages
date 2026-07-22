@@ -24,6 +24,8 @@ What already exists:
 
 - A repository skeleton for the new build system.
 - A builder container definition.
+- A minimal package builder and ALPM package emitter.
+- An example package recipe: `pacman-android-smoke`.
 - A target mapping layer for:
   - `x86_64`
   - `i686`
@@ -36,9 +38,7 @@ What already exists:
 
 What does not exist yet:
 
-- Real package recipes.
 - A full toolchain preparation pipeline.
-- A pacman package assembly pipeline.
 - Repository publication automation tied to real package outputs.
 
 ## Repository Layout
@@ -53,10 +53,13 @@ What does not exist yet:
   CI workflows for builder image publication and target-matrix smoke builds.
 
 - `packages/`
-  Future package definitions.
+  Package definitions, currently including the smoke recipe.
 
 - `toolchain/`
   Repository-local target mapping, NDK acquisition, smoke builds, and future toolchain logic.
+
+- `builder/`
+  Repository-local package build and ALPM package assembly logic.
 
 - `vendor/`
   Ignored location for downloaded toolchains, upstream reference checkouts, and generated sysroot assets.
@@ -92,6 +95,7 @@ Package recipes, packaging flow, and repository policy are intended to stay repo
 See:
 
 - [docs/architecture.md](docs/architecture.md)
+- [docs/package-builder.md](docs/package-builder.md)
 - [docs/rootdir-layout.md](docs/rootdir-layout.md)
 - [docs/termux-reuse.md](docs/termux-reuse.md)
 - [docs/ci-matrix.md](docs/ci-matrix.md)
@@ -103,15 +107,30 @@ The repository includes:
 - a reusable builder container at [docker/builder.Dockerfile](docker/builder.Dockerfile)
 - a matrix workflow at [.github/workflows/build-matrix.yml](.github/workflows/build-matrix.yml)
 - a GHCR publication workflow at [.github/workflows/publish-builder-image.yml](.github/workflows/publish-builder-image.yml)
+- a package builder entry point at [build-package.sh](build-package.sh)
 
-The first CI milestone is not full package output. It is a reliable multi-architecture Android smoke build from the same repository contract.
+The first CI milestone is a reliable multi-architecture Android smoke package build from the same repository contract.
+
+## Building The Example Package
+
+Example:
+
+```bash
+./build-package.sh pacman-android-smoke aarch64
+```
+
+Outputs are written under:
+
+- `out/build/`
+- `out/stage/`
+- `out/packages/`
 
 ## Near-Term Plan
 
 1. Turn the current NDK fetch step into a proper repo-local toolchain preparation flow.
 2. Decide how much of `ndk-toolchain-clang-with-flang` should be adapted versus copied.
-3. Add the first real package recipe.
-4. Emit a real pacman package.
+3. Add more real package recipes beyond the smoke package.
+4. Harden the metadata and dependency model.
 5. Connect package artifacts to repository publication.
 
 ## License

@@ -12,6 +12,7 @@ RUN apt-get update \
         file \
         git \
         jq \
+        libarchive-tools \
         lld \
         llvm \
         make \

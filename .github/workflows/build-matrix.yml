@@ -79,5 +79,5 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: smoke-${{ matrix.target }}
-          path: out/smoke/${{ matrix.target }}
+          path: out/packages/${{ matrix.target }}
           if-no-files-found: error
