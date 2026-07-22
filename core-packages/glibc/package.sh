@@ -5,6 +5,6 @@ PACMAN_ANDROID_PKG_DESCRIPTION="The GNU C Library provides many of the low-level
 PACMAN_ANDROID_PKG_URL="https://sourceware.org/git/glibc.git"
 PACMAN_ANDROID_PKG_LICENSES=("MIT")
 PACMAN_ANDROID_PKG_TARGETS=("x86_64" "i686" "armhf" "aarch64")
-PACMAN_ANDROID_PKG_SRCURL="https://github.com/xingguangcuican6666/glibc-pacman-android/archive/refs/tags/${PACMAN_ANDROID_PKG_VERSION}.tar.gz"
+PACMAN_ANDROID_PKG_SRCURL="https://github.com/xingguangcuican6666/glibc-pacman-android/archive/refs/tags/v${PACMAN_ANDROID_PKG_VERSION}.tar.gz"
 PACMAN_ANDROID_PKG_SHA256="547883c2f0dbc85a4545d4533f5b812fbc4c8ffe1271056de18b51994acbf474"
 PACMAN_ANDROID_PKG_SOURCE_DIRNAME="glibc-${PACMAN_ANDROID_PKG_VERSION}"
