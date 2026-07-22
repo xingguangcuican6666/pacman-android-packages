@@ -1,0 +1,88 @@
+name: Upload Packages
+
+on:
+  workflow_run:
+    workflows:
+      - Build Matrix
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Build Matrix run ID to upload from
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+env:
+  PACMAN_REPO_UPLOAD_URL: ${{ secrets.PACMAN_REPO_UPLOAD_URL }}
+  PACMAN_REPO_UPLOAD_TOKEN: ${{ secrets.PACMAN_REPO_UPLOAD_TOKEN }}
+
+jobs:
+  upload:
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event != 'pull_request'
+      )
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Validate upload secrets
+        id: validate
+        run: |
+          set -euo pipefail
+          if [[ -z "${PACMAN_REPO_UPLOAD_URL}" || -z "${PACMAN_REPO_UPLOAD_TOKEN}" ]]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Upload secrets are missing; skipping upload."
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resolve source run ID
+        id: run
+        if: steps.validate.outputs.enabled == 'true'
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            echo "id=${{ github.event.workflow_run.id }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "id=${{ inputs.run_id }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download package artifacts from source run
+        if: steps.validate.outputs.enabled == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          gh run download "${{ steps.run.outputs.id }}" -D artifacts
+
+      - name: Upload packages to pacman repository
+        if: steps.validate.outputs.enabled == 'true'
+        run: |
+          set -euo pipefail
+
+          mapfile -d '' packages < <(find artifacts -type f -name '*.pkg.tar.zst' -print0 | sort -z)
+          if ((${#packages[@]} == 0)); then
+            echo "No package artifacts found in downloaded run artifacts" >&2
+            exit 1
+          fi
+
+          for package in "${packages[@]}"; do
+            curl \
+              --fail \
+              --show-error \
+              --location \
+              --retry 5 \
+              --retry-all-errors \
+              -H "X-Upload-Token: ${PACMAN_REPO_UPLOAD_TOKEN}" \
+              -F "package=@${package}" \
+              "${PACMAN_REPO_UPLOAD_URL}"
+          done

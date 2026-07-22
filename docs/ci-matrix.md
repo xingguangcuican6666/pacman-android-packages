@@ -30,7 +30,7 @@ Each matrix job should:
 2. Resolve target metadata from the repo-local target map.
 3. Build a smoke package with the repository-local builder for the selected architecture.
 4. Emit artifacts under `out/packages/<target>/`.
-5. On non-PR workflows, upload built packages to the pacman repository when upload secrets are configured.
+5. A separate upload workflow may publish artifacts from successful non-PR build runs.
 
 ## Current Target Map
 
@@ -51,9 +51,19 @@ The repository now has a minimal package recipe and package assembler. The matri
 
 ## Upload Secrets
 
-The workflow looks for these repository secrets:
+The upload workflow looks for these repository secrets:
 
 - `PACMAN_REPO_UPLOAD_URL`
 - `PACMAN_REPO_UPLOAD_TOKEN`
 
-Upload is skipped automatically for `pull_request` events.
+`Build Matrix` itself does not publish packages anymore. `Upload Packages` is responsible for publication.
+
+For automatic publication:
+
+- a successful `Build Matrix` run triggered by `push` or `workflow_dispatch` will trigger `Upload Packages`
+- a `pull_request`-triggered `Build Matrix` run will not trigger publication
+
+For manual publication:
+
+- `Upload Packages` also supports `workflow_dispatch`
+- provide the source `Build Matrix` run ID as input
