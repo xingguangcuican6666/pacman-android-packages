@@ -5,7 +5,7 @@
 The repository should have two CI lanes before the full package builder exists:
 
 1. Build and publish a reusable Docker builder image.
-2. Run a package target matrix that validates Android-native compilation for:
+2. Run a package target matrix that validates Android-native compilation for changed package directories:
    - `x86_64`
    - `i686`
    - `armhf`
@@ -26,12 +26,13 @@ This keeps the image reusable while still supporting future repo-local toolchain
 
 Each matrix job should:
 
-1. Restore or download the Android NDK.
-2. Select a real package recipe from `packages/<name>/`.
-3. Resolve target metadata from the repo-local target map.
-4. Build that package with the repository-local builder for the selected architecture.
-5. Emit artifacts under `out/packages/<target>/`.
-6. A separate upload workflow may publish artifacts from successful non-PR build runs.
+1. Detect changed package directories under `packages/<name>/`.
+2. Restore or download the Android NDK.
+3. Select each changed package recipe automatically.
+4. Resolve target metadata from the repo-local target map.
+5. Build that package with the repository-local builder for the selected architecture.
+6. Emit artifacts under `out/packages/<target>/`.
+7. A separate upload workflow may publish artifacts from successful non-PR build runs.
 
 ## Current Target Map
 
@@ -40,13 +41,19 @@ Each matrix job should:
 - `armhf` -> `armv7a-linux-androideabi`
 - `aarch64` -> `aarch64-linux-android`
 
-## Current Package Under Test
+## Package Selection
 
-The matrix should build real package recipes, not only the smoke package. The current branch target is `fastfetch`.
+By default, CI automatically detects package directories touched by the current change set:
+
+- `pull_request`: files changed in the PR
+- `push`: files changed in the pushed compare range
+- `workflow_dispatch`: optional comma-separated `packages` input, otherwise files changed in `HEAD`
+
+Only directories matching `packages/<name>/` are selected for the build matrix.
 
 ## Why Real Package Builds
 
-Building a real package validates more than the original smoke binary:
+Building changed package recipes validates more than the original smoke binary:
 
 - Docker container is usable
 - Android NDK is downloadable

@@ -6,6 +6,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      packages:
+        description: Comma-separated package names to build
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -15,7 +20,54 @@ env:
   ANDROID_NDK_VERSION: "29"
 
 jobs:
+  detect-packages:
+    runs-on: ubuntu-24.04
+    outputs:
+      has_packages: ${{ steps.detect.outputs.has_packages }}
+      packages: ${{ steps.detect.outputs.packages }}
+      matrix: ${{ steps.detect.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - name: Detect changed package directories
+        id: detect
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_DISPATCH_PACKAGES: ${{ inputs.packages }}
+        run: |
+          set -euo pipefail
+
+          changed_files="$(mktemp)"
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${WORKFLOW_DISPATCH_PACKAGES}" ]]; then
+            python3 ./toolchain/ci/detect-packages.py \
+              --packages "${WORKFLOW_DISPATCH_PACKAGES}" \
+              --github-output "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            gh api \
+              "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
+              --paginate \
+              --jq '.[].filename' > "$changed_files"
+          elif [[ "${{ github.event_name }}" == "push" ]]; then
+            gh api \
+              "repos/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }}" \
+              --jq '.files[].filename' > "$changed_files"
+          else
+            git diff-tree --no-commit-id --name-only -r "${GITHUB_SHA}" > "$changed_files"
+          fi
+
+          python3 ./toolchain/ci/detect-packages.py \
+            --github-output "$GITHUB_OUTPUT" < "$changed_files"
+
   prepare-builder:
+    needs: detect-packages
+    if: needs.detect-packages.outputs.has_packages == 'true'
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -35,18 +87,15 @@ jobs:
           if-no-files-found: error
 
   build-targets:
-    needs: prepare-builder
+    needs:
+      - detect-packages
+      - prepare-builder
+    if: needs.detect-packages.outputs.has_packages == 'true'
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        package:
-          - fastfetch
-        target:
-          - x86_64
-          - i686
-          - armhf
-          - aarch64
+        include: ${{ fromJson(needs.detect-packages.outputs.matrix) }}
 
     steps:
       - name: Checkout
@@ -83,3 +132,12 @@ jobs:
           name: ${{ matrix.package }}-${{ matrix.target }}
           path: out/packages/${{ matrix.target }}
           if-no-files-found: error
+
+  no-package-changes:
+    needs: detect-packages
+    if: needs.detect-packages.outputs.has_packages != 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: No package directories changed
+        run: |
+          echo "No changed package directories were detected under packages/<name>/."

@@ -111,6 +111,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts
+          artifact_count="$(gh api "repos/${GH_REPO}/actions/runs/${{ steps.run.outputs.id }}/artifacts" --jq '[.artifacts[] | select(.name != "builder-image")] | length')"
+          if [[ "$artifact_count" == "0" ]]; then
+            echo "No package artifacts available for this run; skipping download."
+            exit 0
+          fi
           gh run download "${{ steps.run.outputs.id }}" -R "${GH_REPO}" -D artifacts
 
       - name: Upload packages to pacman repository
@@ -120,8 +125,8 @@ jobs:
 
           mapfile -d '' packages < <(find artifacts -type f -name '*.pkg.tar.zst' -print0 | sort -z)
           if ((${#packages[@]} == 0)); then
-            echo "No package artifacts found in downloaded run artifacts" >&2
-            exit 1
+            echo "No package artifacts found in downloaded run artifacts; skipping upload."
+            exit 0
           fi
 
           for package in "${packages[@]}"; do
