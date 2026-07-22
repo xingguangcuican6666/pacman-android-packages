@@ -1,6 +1,6 @@
 PACMAN_ANDROID_PKG_NAME="fastfetch"
 PACMAN_ANDROID_PKG_VERSION="2.66.0"
-PACMAN_ANDROID_PKG_RELEASE="1"
+PACMAN_ANDROID_PKG_RELEASE="3"
 PACMAN_ANDROID_PKG_DESCRIPTION="Fast neofetch-like system information tool"
 PACMAN_ANDROID_PKG_URL="https://github.com/fastfetch-cli/fastfetch"
 PACMAN_ANDROID_PKG_LICENSES=("MIT")
@@ -93,6 +93,7 @@ pacman_android_recipe_build() {
     -DENABLE_QUICKJS=OFF \
     -DENABLE_LIBZFS=OFF \
     -DENABLE_THREADS=ON \
+    -DMODULE_DISABLE_OPENGL=ON \
     -DBINARY_LINK_TYPE=dlopen
 
   cmake --build "$PACMAN_ANDROID_CMAKE_BUILD_DIR" --parallel

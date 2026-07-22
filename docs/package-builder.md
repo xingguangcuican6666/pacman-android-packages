@@ -30,6 +30,10 @@ Each package lives at:
 
 - `packages/<name>/package.sh`
 
+Optional patch directory:
+
+- `packages/<name>/patches/*.patch`
+
 Required metadata variables:
 
 - `PACMAN_ANDROID_PKG_NAME`
@@ -54,6 +58,19 @@ Supported recipe functions:
 - `pacman_android_recipe_install`
 
 Only `pacman_android_recipe_install` is mandatory.
+
+## Patch Application
+
+If `packages/<name>/patches/` exists, the builder applies all `*.patch` files in lexical order after `pacman_android_recipe_prepare` and before `pacman_android_recipe_build`.
+
+The builder expects the recipe to export one of:
+
+- `PACMAN_ANDROID_SOURCE_WORKTREE`
+- `PACMAN_ANDROID_PATCH_TARGET_DIR`
+
+Optional:
+
+- `PACMAN_ANDROID_PATCH_STRIP_LEVEL`
 
 ## Output Layout
 

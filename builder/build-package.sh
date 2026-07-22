@@ -103,6 +103,30 @@ write_repeated_entries() {
   done
 }
 
+apply_recipe_patches() {
+  local patch_dir="$RECIPE_DIR/patches"
+  local source_dir="${PACMAN_ANDROID_SOURCE_WORKTREE:-${PACMAN_ANDROID_PATCH_TARGET_DIR:-}}"
+  local strip_level="${PACMAN_ANDROID_PATCH_STRIP_LEVEL:-1}"
+
+  [[ -d "$patch_dir" ]] || return 0
+
+  if [[ -z "$source_dir" || ! -d "$source_dir" ]]; then
+    echo "patches exist in $patch_dir but no valid source directory was exported" >&2
+    echo "expected PACMAN_ANDROID_SOURCE_WORKTREE or PACMAN_ANDROID_PATCH_TARGET_DIR" >&2
+    exit 1
+  fi
+
+  mapfile -t patch_files < <(find "$patch_dir" -maxdepth 1 -type f -name '*.patch' | sort)
+  if [[ ${#patch_files[@]} -eq 0 ]]; then
+    return 0
+  fi
+
+  local patch_file
+  for patch_file in "${patch_files[@]}"; do
+    patch --forward --reject-file=- -d "$source_dir" "-p${strip_level}" < "$patch_file"
+  done
+}
+
 require_var PACMAN_ANDROID_PKG_NAME
 require_var PACMAN_ANDROID_PKG_VERSION
 require_var PACMAN_ANDROID_PKG_RELEASE
@@ -147,6 +171,8 @@ fi
 if declare -F pacman_android_recipe_prepare >/dev/null; then
   pacman_android_recipe_prepare
 fi
+
+apply_recipe_patches
 
 if declare -F pacman_android_recipe_build >/dev/null; then
   pacman_android_recipe_build
