@@ -6,6 +6,8 @@ on:
       - Build Matrix
     types:
       - completed
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       run_id:
@@ -28,7 +30,8 @@ jobs:
       (
         github.event_name == 'workflow_run' &&
         github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.event != 'pull_request'
+        github.event.workflow_run.event != 'pull_request' &&
+        github.event.workflow_run.head_branch == 'main'
       )
     runs-on: ubuntu-24.04
 
@@ -55,8 +58,53 @@ jobs:
             echo "id=${{ inputs.run_id }}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Download package artifacts from source run
+      - name: Validate source run branch and status
+        id: source
         if: steps.validate.outputs.enabled == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          run_json="$(gh api repos/${{ github.repository }}/actions/runs/${{ steps.run.outputs.id }})"
+          head_branch="$(printf '%s' "$run_json" | jq -r '.head_branch')"
+          conclusion="$(printf '%s' "$run_json" | jq -r '.conclusion')"
+          event_name="$(printf '%s' "$run_json" | jq -r '.event')"
+          workflow_name="$(printf '%s' "$run_json" | jq -r '.name')"
+
+          echo "head_branch=$head_branch"
+          echo "conclusion=$conclusion"
+          echo "event=$event_name"
+          echo "workflow=$workflow_name"
+
+          if [[ "$workflow_name" != "Build Matrix" ]]; then
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            echo "Source run is not a Build Matrix run; skipping upload."
+            exit 0
+          fi
+
+          if [[ "$head_branch" != "main" ]]; then
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            echo "Source run is not from main; skipping upload."
+            exit 0
+          fi
+
+          if [[ "$conclusion" != "success" ]]; then
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            echo "Source run did not succeed; skipping upload."
+            exit 0
+          fi
+
+          if [[ "$event_name" == "pull_request" ]]; then
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            echo "Source run came from pull_request; skipping upload."
+            exit 0
+          fi
+
+          echo "allowed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Download package artifacts from source run
+        if: steps.validate.outputs.enabled == 'true' && steps.source.outputs.allowed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -65,7 +113,7 @@ jobs:
           gh run download "${{ steps.run.outputs.id }}" -D artifacts
 
       - name: Upload packages to pacman repository
-        if: steps.validate.outputs.enabled == 'true'
+        if: steps.validate.outputs.enabled == 'true' && steps.source.outputs.allowed == 'true'
         run: |
           set -euo pipefail
 

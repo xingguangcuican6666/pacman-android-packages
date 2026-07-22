@@ -60,10 +60,11 @@ The upload workflow looks for these repository secrets:
 
 For automatic publication:
 
-- a successful `Build Matrix` run triggered by `push` or `workflow_dispatch` will trigger `Upload Packages`
+- a successful `Build Matrix` run on branch `main` triggered by `push` or `workflow_dispatch` will trigger `Upload Packages`
 - a `pull_request`-triggered `Build Matrix` run will not trigger publication
 
 For manual publication:
 
 - `Upload Packages` also supports `workflow_dispatch`
 - provide the source `Build Matrix` run ID as input
+- the source run must still be from branch `main`, or upload will be skipped
