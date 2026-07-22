@@ -21,7 +21,7 @@ Run from repository root:
 Current example:
 
 ```bash
-./build-package.sh core/fastfetch aarch64
+./build-package.sh extra/fastfetch aarch64
 ```
 
 ## Current Recipe Contract
@@ -49,6 +49,11 @@ Common optional metadata:
 - `PACMAN_ANDROID_PKG_SHA256`
 - `PACMAN_ANDROID_PKG_SOURCE_FILENAME`
 - `PACMAN_ANDROID_PKG_SOURCE_DIRNAME`
+- `PACMAN_ANDROID_PKG_BUILD_SYSTEM`
+- `PACMAN_ANDROID_PKG_MAKE_INSTALL_TARGET`
+- `PACMAN_ANDROID_PKG_EXTRA_CONFIGURE_ARGS`
+- `PACMAN_ANDROID_PKG_EXTRA_BUILD_ARGS`
+- `PACMAN_ANDROID_PKG_EXTRA_INSTALL_ARGS`
 - `PACMAN_ANDROID_PKG_TARGETS`
 - `PACMAN_ANDROID_PKG_DEPENDS`
 - `PACMAN_ANDROID_PKG_PROVIDES`
@@ -58,10 +63,34 @@ Common optional metadata:
 Supported recipe functions:
 
 - `pacman_android_recipe_prepare`
+- `pacman_android_recipe_configure`
 - `pacman_android_recipe_build`
 - `pacman_android_recipe_install`
+- `pacman_android_recipe_post_install`
 
-Only `pacman_android_recipe_install` is mandatory.
+All recipe functions are optional. The builder now provides default `configure`, `build`, and `install` steps and only needs explicit recipe functions when a package deviates from the default pipeline.
+
+## Default Build Pipeline
+
+If a recipe does not override the stage functions, the builder will infer a build system from the extracted source tree using a Termux-like order:
+
+1. `configure` -> `autotools`
+2. `CMakeLists.txt` -> `cmake`
+3. `meson.build` -> `meson`
+4. `build.ninja` -> `ninja`
+5. `GNUmakefile` / `Makefile` / `makefile` -> `make`
+
+`PACMAN_ANDROID_PKG_BUILD_SYSTEM` may be set to one of:
+
+- `auto`
+- `autotools`
+- `cmake`
+- `meson`
+- `ninja`
+- `make`
+- `none`
+
+Use `none` when the recipe will fully override the default build and install logic.
 
 ## Default Source Pipeline
 
@@ -82,9 +111,11 @@ Optional source-shape helpers:
 - `PACMAN_ANDROID_PKG_SOURCE_FILENAME`
 - `PACMAN_ANDROID_PKG_SOURCE_DIRNAME`
 
+If source metadata is not provided, recipes may still export `PACMAN_ANDROID_SOURCE_WORKTREE` manually from `pacman_android_recipe_prepare`.
+
 ## Patch Application
 
-If `<repo>-packages/<name>/patches/` exists, the builder applies all `*.patch` files in lexical order after `pacman_android_recipe_prepare` and before `pacman_android_recipe_build`.
+If `<repo>-packages/<name>/patches/` exists, the builder applies all `*.patch` files in lexical order after `pacman_android_recipe_prepare` and before `pacman_android_recipe_configure`.
 
 The builder expects the recipe to export one of:
 
