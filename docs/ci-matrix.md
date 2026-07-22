@@ -5,7 +5,7 @@
 The repository should have two CI lanes before the full package builder exists:
 
 1. Build and publish a reusable Docker builder image.
-2. Run a target matrix that validates Android-native compilation for:
+2. Run a package target matrix that validates Android-native compilation for:
    - `x86_64`
    - `i686`
    - `armhf`
@@ -27,10 +27,11 @@ This keeps the image reusable while still supporting future repo-local toolchain
 Each matrix job should:
 
 1. Restore or download the Android NDK.
-2. Resolve target metadata from the repo-local target map.
-3. Build a smoke package with the repository-local builder for the selected architecture.
-4. Emit artifacts under `out/packages/<target>/`.
-5. A separate upload workflow may publish artifacts from successful non-PR build runs.
+2. Select a real package recipe from `packages/<name>/`.
+3. Resolve target metadata from the repo-local target map.
+4. Build that package with the repository-local builder for the selected architecture.
+5. Emit artifacts under `out/packages/<target>/`.
+6. A separate upload workflow may publish artifacts from successful non-PR build runs.
 
 ## Current Target Map
 
@@ -39,15 +40,20 @@ Each matrix job should:
 - `armhf` -> `armv7a-linux-androideabi`
 - `aarch64` -> `aarch64-linux-android`
 
-## Why A Smoke Build First
+## Current Package Under Test
 
-The repository now has a minimal package recipe and package assembler. The matrix still targets a smoke package because it validates the hardest early risks first:
+The matrix should build real package recipes, not only the smoke package. The current branch target is `fastfetch`.
+
+## Why Real Package Builds
+
+Building a real package validates more than the original smoke binary:
 
 - Docker container is usable
 - Android NDK is downloadable
 - Target triples are wired correctly
+- Package-specific source fetch and configure logic works
 - ALPM package emission works from the same repository contract
-- All four requested architectures can build from the same repository contract
+- All four requested architectures can build the selected package from the same repository contract
 
 ## Upload Secrets
 

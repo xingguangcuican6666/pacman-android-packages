@@ -40,6 +40,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        package:
+          - fastfetch
         target:
           - x86_64
           - i686
@@ -66,18 +68,18 @@ jobs:
             vendor/android-ndk-r${{ env.ANDROID_NDK_VERSION }}-linux.zip
           key: ${{ runner.os }}-android-ndk-r${{ env.ANDROID_NDK_VERSION }}
 
-      - name: Build Android smoke target
+      - name: Build Android package
         run: |
           docker run --rm \
             -e ANDROID_NDK_VERSION="${ANDROID_NDK_VERSION}" \
             -v "${GITHUB_WORKSPACE}:/work" \
             -w /work \
             "${BUILDER_IMAGE}:${GITHUB_SHA}" \
-            bash ./toolchain/ci/build-target.sh "${{ matrix.target }}"
+            bash ./toolchain/ci/build-target.sh "${{ matrix.package }}" "${{ matrix.target }}"
 
       - name: Upload target artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: smoke-${{ matrix.target }}
+          name: ${{ matrix.package }}-${{ matrix.target }}
           path: out/packages/${{ matrix.target }}
           if-no-files-found: error
