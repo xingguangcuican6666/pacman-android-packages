@@ -8,6 +8,7 @@ RUN apt-get update \
         build-essential \
         ca-certificates \
         clang \
+        cmake \
         curl \
         file \
         git \
