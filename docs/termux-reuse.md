@@ -45,7 +45,7 @@ Why:
 
 ## Termux Areas To Avoid Importing Directly
 
-- `packages/`
+- `core-packages/`, `extra-packages/`, `multilib-packages/`, `disabled-packages/`
 - `build-package.sh`
 - The large `scripts/build/termux_step_*` package pipeline
 

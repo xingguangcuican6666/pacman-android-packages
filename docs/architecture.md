@@ -15,8 +15,14 @@ Build a new pacman-oriented package build system for Android native targets with
 
 ## Proposed Repository Shape
 
-- `packages/<name>/`
-  - Per-package recipe, patches, metadata, and tests.
+- `core-packages/<name>/`
+  - Core package recipe, patches, metadata, and tests.
+- `extra-packages/<name>/`
+  - Extra package recipe, patches, metadata, and tests.
+- `multilib-packages/<name>/`
+  - Multilib package recipe, patches, metadata, and tests.
+- `disabled-packages/<name>/`
+  - Disabled package recipes kept for canonical removal tracking.
 - `toolchain/`
   - Local logic for SDK/NDK detection, sysroot selection, target triples, compiler wrappers, and environment export.
 - `builder/`
@@ -71,6 +77,6 @@ The first CI implementation can use a single smoke package recipe to validate th
 2. Add local target descriptions for `x86_64`, `i686`, `armhf`, and `aarch64`.
 3. Define the default package layout contract around `RootDir=/data/adb/pacman`.
 4. Add a reusable Docker builder image.
-5. Add a GitHub Actions matrix that builds one smoke package for each target.
+5. Add a GitHub Actions matrix that builds changed canonical package directories automatically.
 6. Build one tiny leaf package using the new environment.
 7. Package it as a pacman artifact and upload it to the `core` repo.

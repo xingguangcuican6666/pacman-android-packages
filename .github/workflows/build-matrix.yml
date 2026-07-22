@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       packages:
-        description: Comma-separated package names to build
+        description: Comma-separated package refs to build, for example core/fastfetch
         required: false
         type: string
 
@@ -24,8 +24,10 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       has_packages: ${{ steps.detect.outputs.has_packages }}
+      has_removals: ${{ steps.detect.outputs.has_removals }}
       packages: ${{ steps.detect.outputs.packages }}
       matrix: ${{ steps.detect.outputs.matrix }}
+      remove_packages: ${{ steps.detect.outputs.remove_packages }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -41,11 +43,14 @@ jobs:
           set -euo pipefail
 
           changed_files="$(mktemp)"
+          plan_file="$RUNNER_TEMP/repo-sync-plan.json"
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${WORKFLOW_DISPATCH_PACKAGES}" ]]; then
             python3 ./toolchain/ci/detect-packages.py \
               --packages "${WORKFLOW_DISPATCH_PACKAGES}" \
-              --github-output "$GITHUB_OUTPUT"
+              --github-output "$GITHUB_OUTPUT" \
+              --plan-file "$plan_file" \
+              --repo-root "$GITHUB_WORKSPACE"
             exit 0
           fi
 
@@ -53,17 +58,31 @@ jobs:
             gh api \
               "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
               --paginate \
-              --jq '.[].filename' > "$changed_files"
+              --jq '.[] | [.status, (.previous_filename // ""), .filename] | @tsv' > "$changed_files"
           elif [[ "${{ github.event_name }}" == "push" ]]; then
             gh api \
               "repos/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }}" \
-              --jq '.files[].filename' > "$changed_files"
+              --jq '.files[] | [.status, (.previous_filename // ""), .filename] | @tsv' > "$changed_files"
           else
-            git diff-tree --no-commit-id --name-only -r "${GITHUB_SHA}" > "$changed_files"
+            git diff-tree --no-commit-id --name-status -r "${GITHUB_SHA}" | awk '
+              $1 ~ /^R/ { print "renamed\t" $2 "\t" $3; next }
+              $1 == "A" { print "added\t\t" $2; next }
+              $1 == "D" { print "removed\t\t" $2; next }
+              { print "modified\t\t" $2 }
+            ' > "$changed_files"
           fi
 
           python3 ./toolchain/ci/detect-packages.py \
-            --github-output "$GITHUB_OUTPUT" < "$changed_files"
+            --github-output "$GITHUB_OUTPUT" \
+            --plan-file "$plan_file" \
+            --repo-root "$GITHUB_WORKSPACE" < "$changed_files"
+
+      - name: Upload repository sync plan
+        uses: actions/upload-artifact@v7
+        with:
+          name: repo-sync-plan
+          path: ${{ runner.temp }}/repo-sync-plan.json
+          if-no-files-found: error
 
   prepare-builder:
     needs: detect-packages
@@ -124,13 +143,13 @@ jobs:
             -v "${GITHUB_WORKSPACE}:/work" \
             -w /work \
             "${BUILDER_IMAGE}:${GITHUB_SHA}" \
-            bash ./toolchain/ci/build-target.sh "${{ matrix.package }}" "${{ matrix.target }}"
+            bash ./toolchain/ci/build-target.sh "${{ matrix.package_ref }}" "${{ matrix.target }}"
 
       - name: Upload target artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.package }}-${{ matrix.target }}
-          path: out/packages/${{ matrix.target }}
+          name: ${{ matrix.repo }}-${{ matrix.package }}-${{ matrix.target }}
+          path: out/packages/${{ matrix.repo }}/${{ matrix.target }}
           if-no-files-found: error
 
   no-package-changes:
