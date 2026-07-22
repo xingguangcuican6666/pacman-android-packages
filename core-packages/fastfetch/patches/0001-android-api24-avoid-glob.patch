@@ -1,0 +1,32 @@
+diff --git a/src/common/impl/io_unix.c b/src/common/impl/io_unix.c
+index e603186..0213c41 100644
+--- a/src/common/impl/io_unix.c
++++ b/src/common/impl/io_unix.c
+@@ -108,6 +108,18 @@ bool ffPathExpandEnv(const char* in, FFstrbuf* out) {
+ 
+     wordfree(&exp);
+ 
++#else
++
++#if defined(__ANDROID__) && defined(__ANDROID_API__) && __ANDROID_API__ < 28
++    /**
++     * glob(3) is not available on older Android API levels.
++     * Keep plain paths usable instead of failing the build on API 24.
++     */
++    result = true;
++    ffStrbufSetS(out, in);
++
++    return result;
++
+ #else
+ 
+     glob_t gb;
+@@ -130,6 +142,8 @@ bool ffPathExpandEnv(const char* in, FFstrbuf* out) {
+ 
+     globfree(&gb);
+ 
++#endif
++
+ #endif
+ 
+     return result;

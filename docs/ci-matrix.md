@@ -5,7 +5,7 @@
 The repository should have two CI lanes before the full package builder exists:
 
 1. Build and publish a reusable Docker builder image.
-2. Run a package target matrix that validates Android-native compilation for changed package directories:
+2. Run a package target matrix that validates Android-native compilation for changed canonical package directories:
    - `x86_64`
    - `i686`
    - `armhf`
@@ -26,12 +26,12 @@ This keeps the image reusable while still supporting future repo-local toolchain
 
 Each matrix job should:
 
-1. Detect changed package directories under `packages/<name>/`.
+1. Detect changed package directories under `<repo>-packages/<name>/`.
 2. Restore or download the Android NDK.
 3. Select each changed package recipe automatically.
 4. Resolve target metadata from the repo-local target map.
 5. Build that package with the repository-local builder for the selected architecture.
-6. Emit artifacts under `out/packages/<target>/`.
+6. Emit artifacts under `out/packages/<repo>/<target>/`.
 7. A separate upload workflow may publish artifacts from successful non-PR build runs.
 
 ## Current Target Map
@@ -49,7 +49,7 @@ By default, CI automatically detects package directories touched by the current 
 - `push`: files changed in the pushed compare range
 - `workflow_dispatch`: optional comma-separated `packages` input, otherwise files changed in `HEAD`
 
-Only directories matching `packages/<name>/` are selected for the build matrix.
+Only directories matching `<repo>-packages/<name>/` are selected for the build matrix.
 
 ## Why Real Package Builds
 

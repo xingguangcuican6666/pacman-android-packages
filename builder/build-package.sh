@@ -5,32 +5,96 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 if [[ $# -ne 2 ]]; then
-  echo "usage: $0 <package-name> <x86_64|i686|armhf|aarch64>" >&2
+  echo "usage: $0 <package-ref> <x86_64|i686|armhf|aarch64>" >&2
   exit 1
 fi
 
-PACKAGE_NAME="$1"
+PACKAGE_REF="$1"
 TARGET="$2"
-RECIPE_DIR="$REPO_ROOT/packages/$PACKAGE_NAME"
-RECIPE_FILE="$RECIPE_DIR/package.sh"
 
-if [[ ! -f "$RECIPE_FILE" ]]; then
-  echo "package recipe not found: $RECIPE_FILE" >&2
+active_collections() {
+  local entry
+  for entry in "$REPO_ROOT"/*-packages; do
+    [[ -d "$entry" ]] || continue
+    local name
+    name="$(basename "$entry")"
+    [[ "$name" == "disabled-packages" ]] && continue
+    printf '%s\n' "$name"
+  done
+}
+
+
+find_recipe_dir() {
+  local package_ref="$1"
+  local collection=""
+  local package_name=""
+
+  if [[ "$package_ref" == */* ]]; then
+    collection="${package_ref%%/*}"
+    package_name="${package_ref#*/}"
+    if [[ "$collection" != *-packages ]]; then
+      collection="${collection}-packages"
+    fi
+    if [[ -f "$REPO_ROOT/$collection/$package_name/package.sh" ]]; then
+      printf '%s\n' "$REPO_ROOT/$collection/$package_name"
+      return 0
+    fi
+  else
+    package_name="$package_ref"
+    local matches=()
+    local collection_name
+    while IFS= read -r collection_name; do
+      [[ -n "$collection_name" ]] || continue
+      local candidate="$REPO_ROOT/$collection_name/$package_name"
+      if [[ -f "$candidate/package.sh" ]]; then
+        matches+=("$candidate")
+      fi
+    done < <(active_collections)
+
+    if [[ ${#matches[@]} -eq 1 ]]; then
+      printf '%s\n' "${matches[0]}"
+      return 0
+    fi
+
+    if [[ ${#matches[@]} -gt 1 ]]; then
+      echo "package reference is ambiguous: $package_ref" >&2
+      printf '%s\n' "${matches[@]}" >&2
+      exit 1
+    fi
+  fi
+
+  echo "package recipe not found for reference: $package_ref" >&2
+  exit 1
+}
+
+
+RECIPE_DIR="$(find_recipe_dir "$PACKAGE_REF")"
+RECIPE_FILE="$RECIPE_DIR/package.sh"
+PACKAGE_COLLECTION="$(basename "$(dirname "$RECIPE_DIR")")"
+PACKAGE_NAME="$(basename "$RECIPE_DIR")"
+
+if [[ "$PACKAGE_COLLECTION" == "disabled-packages" || "$PACKAGE_COLLECTION" != *-packages ]]; then
+  echo "invalid active package collection: $PACKAGE_COLLECTION" >&2
   exit 1
 fi
+
+PACKAGE_REPO="${PACKAGE_COLLECTION%-packages}"
 
 source "$REPO_ROOT/toolchain/env.sh"
 pacman_android_prepare_environment "$TARGET"
 
 export PACMAN_ANDROID_REPO_ROOT="$REPO_ROOT"
+export PACMAN_ANDROID_PACKAGE_REF="$PACKAGE_REF"
+export PACMAN_ANDROID_PACKAGE_COLLECTION="$PACKAGE_COLLECTION"
+export PACMAN_ANDROID_PACKAGE_REPO="$PACKAGE_REPO"
 export PACMAN_ANDROID_RECIPE_DIR="$RECIPE_DIR"
 export PACMAN_ANDROID_RECIPE_FILE="$RECIPE_FILE"
-export PACMAN_ANDROID_BUILD_ROOT="$REPO_ROOT/out/build/$PACKAGE_NAME/$TARGET"
+export PACMAN_ANDROID_BUILD_ROOT="$REPO_ROOT/out/build/$PACKAGE_REPO/$PACKAGE_NAME/$TARGET"
 export PACMAN_ANDROID_BUILD_DIR="$PACMAN_ANDROID_BUILD_ROOT/work"
-export PACMAN_ANDROID_STAGE_ROOT="$REPO_ROOT/out/stage/$PACKAGE_NAME/$TARGET"
+export PACMAN_ANDROID_STAGE_ROOT="$REPO_ROOT/out/stage/$PACKAGE_REPO/$PACKAGE_NAME/$TARGET"
 export PACMAN_ANDROID_ROOTFS_DIR="$PACMAN_ANDROID_STAGE_ROOT/rootfs"
 export PACMAN_ANDROID_METADATA_DIR="$PACMAN_ANDROID_STAGE_ROOT/metadata"
-export PACMAN_ANDROID_PACKAGE_DIR="$REPO_ROOT/out/packages/$TARGET"
+export PACMAN_ANDROID_PACKAGE_DIR="$REPO_ROOT/out/packages/$PACKAGE_REPO/$TARGET"
 
 mkdir -p \
   "$PACMAN_ANDROID_BUILD_DIR" \
@@ -157,6 +221,9 @@ mkdir -p "$PACMAN_ANDROID_BUILD_DIR" "$PACMAN_ANDROID_ROOTFS_DIR" "$PACMAN_ANDRO
 if [[ "${PACMAN_ANDROID_DRY_RUN:-0}" == "1" ]]; then
   cat <<EOF
 package=$PACMAN_ANDROID_PKG_NAME
+package_ref=$PACMAN_ANDROID_PACKAGE_REF
+package_collection=$PACMAN_ANDROID_PACKAGE_COLLECTION
+package_repo=$PACMAN_ANDROID_PACKAGE_REPO
 target=$PACMAN_ANDROID_TARGET
 package_arch=$PACMAN_ANDROID_PACKAGE_ARCH
 version=$PACMAN_ANDROID_PKG_FULL_VERSION
@@ -243,10 +310,14 @@ cp "$MTREE_FILE" "$PACMAN_ANDROID_PACKAGE_DIR/${PACMAN_ANDROID_PACKAGE_BASENAME}
 
 {
   printf 'package=%s\n' "$PACMAN_ANDROID_PKG_NAME"
+  printf 'package_ref=%s\n' "$PACMAN_ANDROID_PACKAGE_REF"
+  printf 'package_collection=%s\n' "$PACMAN_ANDROID_PACKAGE_COLLECTION"
+  printf 'package_repo=%s\n' "$PACMAN_ANDROID_PACKAGE_REPO"
   printf 'target=%s\n' "$PACMAN_ANDROID_TARGET"
   printf 'package_arch=%s\n' "$PACMAN_ANDROID_PACKAGE_ARCH"
   printf 'version=%s\n' "$PACMAN_ANDROID_PKG_FULL_VERSION"
   printf 'package_path=%s\n' "$PACMAN_ANDROID_PACKAGE_PATH"
+  printf 'package_file=%s\n' "$(basename "$PACMAN_ANDROID_PACKAGE_PATH")"
   printf 'rootfs_dir=%s\n' "$PACMAN_ANDROID_ROOTFS_DIR"
   printf 'build_dir=%s\n' "$PACMAN_ANDROID_BUILD_DIR"
   printf 'ndk_root=%s\n' "$PACMAN_ANDROID_NDK_ROOT"

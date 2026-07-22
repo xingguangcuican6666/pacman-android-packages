@@ -52,8 +52,17 @@ What does not exist yet:
 - `.github/workflows/`
   CI workflows for builder image publication and target-matrix smoke builds.
 
-- `packages/`
-  Package definitions, currently including the smoke recipe.
+- `core-packages/`
+  Core package definitions, currently including `fastfetch` and the smoke recipe.
+
+- `extra-packages/`
+  Optional extra packages.
+
+- `multilib-packages/`
+  Multilib packages.
+
+- `disabled-packages/`
+  Disabled package definitions awaiting removal or archival.
 
 - `toolchain/`
   Repository-local target mapping, NDK acquisition, smoke builds, and future toolchain logic.
@@ -116,7 +125,7 @@ The first CI milestone is a reliable multi-architecture Android smoke package bu
 Example:
 
 ```bash
-./build-package.sh pacman-android-smoke aarch64
+./build-package.sh core/fastfetch aarch64
 ```
 
 Outputs are written under:

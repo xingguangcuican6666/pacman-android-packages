@@ -118,18 +118,26 @@ jobs:
           fi
           gh run download "${{ steps.run.outputs.id }}" -R "${GH_REPO}" -D artifacts
 
-      - name: Upload packages to pacman repository
+      - name: Purge removed or moved packages from repository
         if: steps.validate.outputs.enabled == 'true' && steps.source.outputs.allowed == 'true'
         run: |
           set -euo pipefail
 
-          mapfile -d '' packages < <(find artifacts -type f -name '*.pkg.tar.zst' -print0 | sort -z)
-          if ((${#packages[@]} == 0)); then
-            echo "No package artifacts found in downloaded run artifacts; skipping upload."
+          upload_base="${PACMAN_REPO_UPLOAD_URL%/upload}"
+
+          plan_file="artifacts/repo-sync-plan/repo-sync-plan.json"
+          if [[ ! -f "$plan_file" ]]; then
+            echo "No repo sync plan found; skipping purge."
             exit 0
           fi
 
-          for package in "${packages[@]}"; do
+          mapfile -t remove_packages < <(jq -r '.remove_packages[]?' "$plan_file")
+          if ((${#remove_packages[@]} == 0)); then
+            echo "No packages need purge."
+            exit 0
+          fi
+
+          for package in "${remove_packages[@]}"; do
             curl \
               --fail \
               --show-error \
@@ -137,6 +145,45 @@ jobs:
               --retry 5 \
               --retry-all-errors \
               -H "X-Upload-Token: ${PACMAN_REPO_UPLOAD_TOKEN}" \
-              -F "package=@${package}" \
-              "${PACMAN_REPO_UPLOAD_URL}"
+              -F "package=${package}" \
+              "${upload_base}/remove"
+          done
+
+      - name: Upload packages to pacman repository
+        if: steps.validate.outputs.enabled == 'true' && steps.source.outputs.allowed == 'true'
+        run: |
+          set -euo pipefail
+
+          upload_base="${PACMAN_REPO_UPLOAD_URL%/upload}"
+
+          mapfile -d '' manifests < <(find artifacts -type f -name '*.manifest' -print0 | sort -z)
+          if ((${#manifests[@]} == 0)); then
+            echo "No package artifacts found in downloaded run artifacts; skipping upload."
+            exit 0
+          fi
+
+          for manifest in "${manifests[@]}"; do
+            repo="$(grep '^package_repo=' "$manifest" | cut -d= -f2-)"
+            package_file="$(grep '^package_file=' "$manifest" | cut -d= -f2-)"
+            if [[ -z "$repo" || -z "$package_file" ]]; then
+              echo "Manifest missing package_repo or package_file: $manifest" >&2
+              exit 1
+            fi
+
+            package_dir="$(dirname "$manifest")"
+            package_path="$package_dir/$package_file"
+            if [[ ! -f "$package_path" ]]; then
+              echo "Package file referenced by manifest is missing: $package_path" >&2
+              exit 1
+            fi
+
+            curl \
+              --fail \
+              --show-error \
+              --location \
+              --retry 5 \
+              --retry-all-errors \
+              -H "X-Upload-Token: ${PACMAN_REPO_UPLOAD_TOKEN}" \
+              -F "package=@${package_path}" \
+              "${upload_base}/upload/${repo}"
           done
