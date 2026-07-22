@@ -20,6 +20,7 @@ permissions:
   contents: read
 
 env:
+  GH_REPO: ${{ github.repository }}
   PACMAN_REPO_UPLOAD_URL: ${{ secrets.PACMAN_REPO_UPLOAD_URL }}
   PACMAN_REPO_UPLOAD_TOKEN: ${{ secrets.PACMAN_REPO_UPLOAD_TOKEN }}
 
@@ -110,7 +111,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts
-          gh run download "${{ steps.run.outputs.id }}" -D artifacts
+          gh run download "${{ steps.run.outputs.id }}" -R "${GH_REPO}" -D artifacts
 
       - name: Upload packages to pacman repository
         if: steps.validate.outputs.enabled == 'true' && steps.source.outputs.allowed == 'true'
