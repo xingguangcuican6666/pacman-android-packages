@@ -30,6 +30,7 @@ Each matrix job should:
 2. Resolve target metadata from the repo-local target map.
 3. Build a smoke package with the repository-local builder for the selected architecture.
 4. Emit artifacts under `out/packages/<target>/`.
+5. On non-PR workflows, upload built packages to the pacman repository when upload secrets are configured.
 
 ## Current Target Map
 
@@ -47,3 +48,12 @@ The repository now has a minimal package recipe and package assembler. The matri
 - Target triples are wired correctly
 - ALPM package emission works from the same repository contract
 - All four requested architectures can build from the same repository contract
+
+## Upload Secrets
+
+The workflow looks for these repository secrets:
+
+- `PACMAN_REPO_UPLOAD_URL`
+- `PACMAN_REPO_UPLOAD_TOKEN`
+
+Upload is skipped automatically for `pull_request` events.

@@ -81,3 +81,30 @@ jobs:
           name: smoke-${{ matrix.target }}
           path: out/packages/${{ matrix.target }}
           if-no-files-found: error
+
+      - name: Upload packages to pacman repository
+        if: github.event_name != 'pull_request' && secrets.PACMAN_REPO_UPLOAD_URL != '' && secrets.PACMAN_REPO_UPLOAD_TOKEN != ''
+        env:
+          PACMAN_REPO_UPLOAD_URL: ${{ secrets.PACMAN_REPO_UPLOAD_URL }}
+          PACMAN_REPO_UPLOAD_TOKEN: ${{ secrets.PACMAN_REPO_UPLOAD_TOKEN }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          packages=(out/packages/${{ matrix.target }}/*.pkg.tar.zst)
+          if ((${#packages[@]} == 0)); then
+            echo "No packages found for target ${{ matrix.target }}" >&2
+            exit 1
+          fi
+
+          for package in "${packages[@]}"; do
+            curl \
+              --fail \
+              --show-error \
+              --location \
+              --retry 5 \
+              --retry-all-errors \
+              -H "X-Upload-Token: ${PACMAN_REPO_UPLOAD_TOKEN}" \
+              -F "package=@${package}" \
+              "${PACMAN_REPO_UPLOAD_URL}"
+          done
