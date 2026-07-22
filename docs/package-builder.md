@@ -38,13 +38,17 @@ Required metadata variables:
 
 - `PACMAN_ANDROID_PKG_NAME`
 - `PACMAN_ANDROID_PKG_VERSION`
-- `PACMAN_ANDROID_PKG_RELEASE`
+- `PACMAN_ANDROID_PKG_REVERSION`
 - `PACMAN_ANDROID_PKG_DESCRIPTION`
 
 Common optional metadata:
 
 - `PACMAN_ANDROID_PKG_URL`
 - `PACMAN_ANDROID_PKG_LICENSES`
+- `PACMAN_ANDROID_PKG_SRCURL`
+- `PACMAN_ANDROID_PKG_SHA256`
+- `PACMAN_ANDROID_PKG_SOURCE_FILENAME`
+- `PACMAN_ANDROID_PKG_SOURCE_DIRNAME`
 - `PACMAN_ANDROID_PKG_TARGETS`
 - `PACMAN_ANDROID_PKG_DEPENDS`
 - `PACMAN_ANDROID_PKG_PROVIDES`
@@ -58,6 +62,25 @@ Supported recipe functions:
 - `pacman_android_recipe_install`
 
 Only `pacman_android_recipe_install` is mandatory.
+
+## Default Source Pipeline
+
+If a recipe sets:
+
+- `PACMAN_ANDROID_PKG_SRCURL`
+- `PACMAN_ANDROID_PKG_SHA256`
+
+the builder will automatically:
+
+1. download the archive into `out/distfiles/`
+2. verify the SHA256 checksum
+3. extract the source tree into the package build root
+4. export `PACMAN_ANDROID_SOURCE_WORKTREE`
+
+Optional source-shape helpers:
+
+- `PACMAN_ANDROID_PKG_SOURCE_FILENAME`
+- `PACMAN_ANDROID_PKG_SOURCE_DIRNAME`
 
 ## Patch Application
 
@@ -87,7 +110,7 @@ For a package `<repo>/<name>` and target `<target>`:
 
 The builder currently emits:
 
-- `<name>-<version>-<release>-<arch>.pkg.tar.zst`
+- `<name>-<version>-<reversion>-<arch>.pkg.tar.zst`
 - matching `.PKGINFO`
 - matching `.BUILDINFO`
 - matching `.MTREE`

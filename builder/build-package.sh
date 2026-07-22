@@ -104,11 +104,15 @@ mkdir -p \
 
 declare PACMAN_ANDROID_PKG_NAME=""
 declare PACMAN_ANDROID_PKG_VERSION=""
-declare PACMAN_ANDROID_PKG_RELEASE=""
+declare PACMAN_ANDROID_PKG_REVERSION=""
 declare PACMAN_ANDROID_PKG_DESCRIPTION=""
 declare PACMAN_ANDROID_PKG_URL=""
 declare PACMAN_ANDROID_PKG_BASE=""
 declare PACMAN_ANDROID_PKG_PACKAGER=""
+declare PACMAN_ANDROID_PKG_SRCURL=""
+declare PACMAN_ANDROID_PKG_SHA256=""
+declare PACMAN_ANDROID_PKG_SOURCE_FILENAME=""
+declare PACMAN_ANDROID_PKG_SOURCE_DIRNAME=""
 declare -a PACMAN_ANDROID_PKG_LICENSES=()
 declare -a PACMAN_ANDROID_PKG_TARGETS=()
 declare -a PACMAN_ANDROID_PKG_DEPENDS=()
@@ -167,6 +171,49 @@ write_repeated_entries() {
   done
 }
 
+prepare_default_source() {
+  [[ -n "$PACMAN_ANDROID_PKG_SRCURL" ]] || return 0
+
+  require_var PACMAN_ANDROID_PKG_SHA256
+
+  export PACMAN_ANDROID_DISTFILES_DIR="$PACMAN_ANDROID_REPO_ROOT/out/distfiles"
+  export PACMAN_ANDROID_SOURCE_DIR="$PACMAN_ANDROID_BUILD_ROOT/src"
+  export PACMAN_ANDROID_CMAKE_BUILD_DIR="$PACMAN_ANDROID_BUILD_ROOT/cmake-build"
+
+  mkdir -p "$PACMAN_ANDROID_DISTFILES_DIR" "$PACMAN_ANDROID_SOURCE_DIR"
+
+  local source_filename="${PACMAN_ANDROID_PKG_SOURCE_FILENAME:-$(basename "${PACMAN_ANDROID_PKG_SRCURL%%\?*}")}"
+  export PACMAN_ANDROID_SOURCE_ARCHIVE="$PACMAN_ANDROID_DISTFILES_DIR/$source_filename"
+
+  if [[ ! -f "$PACMAN_ANDROID_SOURCE_ARCHIVE" ]]; then
+    curl \
+      --fail \
+      --location \
+      --retry 5 \
+      --retry-all-errors \
+      --output "$PACMAN_ANDROID_SOURCE_ARCHIVE" \
+      "$PACMAN_ANDROID_PKG_SRCURL"
+  fi
+
+  echo "${PACMAN_ANDROID_PKG_SHA256}  ${PACMAN_ANDROID_SOURCE_ARCHIVE}" | sha256sum --check --status
+
+  rm -rf "$PACMAN_ANDROID_SOURCE_DIR" "$PACMAN_ANDROID_CMAKE_BUILD_DIR"
+  mkdir -p "$PACMAN_ANDROID_SOURCE_DIR"
+  bsdtar -xf "$PACMAN_ANDROID_SOURCE_ARCHIVE" -C "$PACMAN_ANDROID_SOURCE_DIR"
+
+  local source_dirname="${PACMAN_ANDROID_PKG_SOURCE_DIRNAME:-$(bsdtar -tf "$PACMAN_ANDROID_SOURCE_ARCHIVE" | head -n1 | cut -d/ -f1)}"
+  if [[ -z "$source_dirname" ]]; then
+    echo "failed to infer source directory name from archive: $PACMAN_ANDROID_SOURCE_ARCHIVE" >&2
+    exit 1
+  fi
+
+  export PACMAN_ANDROID_SOURCE_WORKTREE="$PACMAN_ANDROID_SOURCE_DIR/$source_dirname"
+  if [[ ! -d "$PACMAN_ANDROID_SOURCE_WORKTREE" ]]; then
+    echo "expected source worktree does not exist: $PACMAN_ANDROID_SOURCE_WORKTREE" >&2
+    exit 1
+  fi
+}
+
 apply_recipe_patches() {
   local patch_dir="$RECIPE_DIR/patches"
   local source_dir="${PACMAN_ANDROID_SOURCE_WORKTREE:-${PACMAN_ANDROID_PATCH_TARGET_DIR:-}}"
@@ -193,7 +240,7 @@ apply_recipe_patches() {
 
 require_var PACMAN_ANDROID_PKG_NAME
 require_var PACMAN_ANDROID_PKG_VERSION
-require_var PACMAN_ANDROID_PKG_RELEASE
+require_var PACMAN_ANDROID_PKG_REVERSION
 require_var PACMAN_ANDROID_PKG_DESCRIPTION
 
 if [[ ${#PACMAN_ANDROID_PKG_TARGETS[@]} -gt 0 ]] && ! in_array "$TARGET" "${PACMAN_ANDROID_PKG_TARGETS[@]}"; then
@@ -207,7 +254,7 @@ if ! declare -F pacman_android_recipe_install >/dev/null; then
 fi
 
 export PACMAN_ANDROID_PKG_BASE="${PACMAN_ANDROID_PKG_BASE:-$PACMAN_ANDROID_PKG_NAME}"
-export PACMAN_ANDROID_PKG_FULL_VERSION="${PACMAN_ANDROID_PKG_VERSION}-${PACMAN_ANDROID_PKG_RELEASE}"
+export PACMAN_ANDROID_PKG_FULL_VERSION="${PACMAN_ANDROID_PKG_VERSION}-${PACMAN_ANDROID_PKG_REVERSION}"
 export PACMAN_ANDROID_PKG_PACKAGER="$(detect_packager)"
 export PACMAN_ANDROID_PACKAGE_BASENAME="${PACMAN_ANDROID_PKG_NAME}-${PACMAN_ANDROID_PKG_FULL_VERSION}-${PACMAN_ANDROID_PACKAGE_ARCH}"
 export PACMAN_ANDROID_PACKAGE_PATH="$PACMAN_ANDROID_PACKAGE_DIR/${PACMAN_ANDROID_PACKAGE_BASENAME}.pkg.tar.zst"
@@ -227,6 +274,7 @@ package_repo=$PACMAN_ANDROID_PACKAGE_REPO
 target=$PACMAN_ANDROID_TARGET
 package_arch=$PACMAN_ANDROID_PACKAGE_ARCH
 version=$PACMAN_ANDROID_PKG_FULL_VERSION
+srcurl=$PACMAN_ANDROID_PKG_SRCURL
 recipe=$PACMAN_ANDROID_RECIPE_FILE
 package_path=$PACMAN_ANDROID_PACKAGE_PATH
 ndk_root=$PACMAN_ANDROID_NDK_ROOT
@@ -234,6 +282,8 @@ rootdir=$PACMAN_ROOTDIR
 EOF
   exit 0
 fi
+
+prepare_default_source
 
 if declare -F pacman_android_recipe_prepare >/dev/null; then
   pacman_android_recipe_prepare
