@@ -1,0 +1,83 @@
+name: Build Matrix
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BUILDER_IMAGE: local/pacman-android-builder
+  ANDROID_NDK_VERSION: "29"
+
+jobs:
+  prepare-builder:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Build builder image
+        run: docker build -f docker/builder.Dockerfile -t "${BUILDER_IMAGE}:${GITHUB_SHA}" .
+
+      - name: Save builder image
+        run: docker save "${BUILDER_IMAGE}:${GITHUB_SHA}" | gzip -1 > builder-image.tar.gz
+
+      - name: Upload builder image
+        uses: actions/upload-artifact@v7
+        with:
+          name: builder-image
+          path: builder-image.tar.gz
+          if-no-files-found: error
+
+  build-targets:
+    needs: prepare-builder
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64
+          - i686
+          - armhf
+          - aarch64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Download builder image
+        uses: actions/download-artifact@v8
+        with:
+          name: builder-image
+
+      - name: Load builder image
+        run: gzip -dc builder-image.tar.gz | docker load
+
+      - name: Restore Android NDK cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            vendor/android-ndk-r${{ env.ANDROID_NDK_VERSION }}
+            vendor/android-ndk-r${{ env.ANDROID_NDK_VERSION }}-linux.zip
+          key: ${{ runner.os }}-android-ndk-r${{ env.ANDROID_NDK_VERSION }}
+
+      - name: Build Android smoke target
+        run: |
+          docker run --rm \
+            -e ANDROID_NDK_VERSION="${ANDROID_NDK_VERSION}" \
+            -v "${GITHUB_WORKSPACE}:/work" \
+            -w /work \
+            "${BUILDER_IMAGE}:${GITHUB_SHA}" \
+            bash ./toolchain/ci/build-target.sh "${{ matrix.target }}"
+
+      - name: Upload target artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: smoke-${{ matrix.target }}
+          path: out/smoke/${{ matrix.target }}
+          if-no-files-found: error

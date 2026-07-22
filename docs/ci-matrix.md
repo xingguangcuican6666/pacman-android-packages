@@ -1,0 +1,48 @@
+# CI Matrix
+
+## Goal
+
+The repository should have two CI lanes before the full package builder exists:
+
+1. Build and publish a reusable Docker builder image.
+2. Run a target matrix that validates Android-native compilation for:
+   - `x86_64`
+   - `i686`
+   - `armhf`
+   - `aarch64`
+
+## Builder Image
+
+The builder image is intentionally host-oriented:
+
+- Base: Ubuntu
+- Includes generic build dependencies such as `bash`, `curl`, `git`, `unzip`, `llvm`, `clang`, `ninja`, `pkg-config`, `zstd`
+- Does not bake package recipes into the image
+- Leaves Android NDK acquisition to the repository toolchain layer
+
+This keeps the image reusable while still supporting future repo-local toolchain logic.
+
+## Matrix Contract
+
+Each matrix job should:
+
+1. Restore or download the Android NDK.
+2. Resolve target metadata from the repo-local target map.
+3. Compile a smoke binary with the Android NDK clang wrapper for the selected architecture.
+4. Emit artifacts under `out/smoke/<target>/`.
+
+## Current Target Map
+
+- `x86_64` -> `x86_64-linux-android`
+- `i686` -> `i686-linux-android`
+- `armhf` -> `armv7a-linux-androideabi`
+- `aarch64` -> `aarch64-linux-android`
+
+## Why A Smoke Build First
+
+This repository does not yet have package recipes or a pacman package assembler. The matrix therefore validates the hardest early risk first:
+
+- Docker container is usable
+- Android NDK is downloadable
+- Target triples are wired correctly
+- All four requested architectures can compile from the same repository contract

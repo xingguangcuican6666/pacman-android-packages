@@ -1,0 +1,47 @@
+name: Publish Builder Image
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Resolve image name
+        run: echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}/builder" >> "$GITHUB_ENV"
+
+      - name: Login to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build builder image
+        run: |
+          docker build \
+            -f docker/builder.Dockerfile \
+            -t "${IMAGE_NAME}:sha-${GITHUB_SHA}" \
+            .
+
+      - name: Tag branch aliases
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker tag "${IMAGE_NAME}:sha-${GITHUB_SHA}" "${IMAGE_NAME}:main"
+          docker tag "${IMAGE_NAME}:sha-${GITHUB_SHA}" "${IMAGE_NAME}:latest"
+
+      - name: Push builder image
+        run: |
+          docker push "${IMAGE_NAME}:sha-${GITHUB_SHA}"
+
+      - name: Push branch aliases
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker push "${IMAGE_NAME}:main"
+          docker push "${IMAGE_NAME}:latest"
