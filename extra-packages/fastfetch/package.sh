@@ -8,75 +8,63 @@ PACMAN_ANDROID_PKG_TARGETS=("x86_64" "i686" "armhf" "aarch64")
 PACMAN_ANDROID_PKG_SRCURL="https://github.com/fastfetch-cli/fastfetch/archive/refs/tags/${PACMAN_ANDROID_PKG_VERSION}.tar.gz"
 PACMAN_ANDROID_PKG_SHA256="547883c2f0dbc85a4545d4533f5b812fbc4c8ffe1271056de18b51994acbf474"
 PACMAN_ANDROID_PKG_SOURCE_DIRNAME="fastfetch-${PACMAN_ANDROID_PKG_VERSION}"
+PACMAN_ANDROID_PKG_BUILD_SYSTEM="cmake"
 
+case "$PACMAN_ANDROID_TARGET" in
+  x86_64) pacman_android_fastfetch_processor_override="x86_64" ;;
+  i686) pacman_android_fastfetch_processor_override="i686" ;;
+  armhf) pacman_android_fastfetch_processor_override="armv7l" ;;
+  aarch64) pacman_android_fastfetch_processor_override="aarch64" ;;
+  *)
+    echo "unsupported fastfetch target: $PACMAN_ANDROID_TARGET" >&2
+    exit 1
+    ;;
+esac
 
-pacman_android_recipe_build() {
-  local toolchain_file="$PACMAN_ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake"
-  local processor_override=""
+PACMAN_ANDROID_PKG_EXTRA_CONFIGURE_ARGS=(
+  "-DTARGET_DIR_ROOT=$PACMAN_ROOTDIR"
+  "-DTARGET_DIR_USR=$PACMAN_ROOTDIR/usr"
+  "-DTARGET_DIR_HOME=$PACMAN_ROOTDIR/home"
+  "-DTARGET_DIR_ETC=$PACMAN_ROOTDIR/etc"
+  "-DCMAKE_SYSTEM_PROCESSOR_OVERRIDE=$pacman_android_fastfetch_processor_override"
+  "-DBUILD_FLASHFETCH=OFF"
+  "-DBUILD_TESTS=OFF"
+  "-DSET_TWEAK=OFF"
+  "-DINSTALL_LICENSE=ON"
+  "-DENABLE_VULKAN=OFF"
+  "-DENABLE_WAYLAND=OFF"
+  "-DENABLE_XCB_RANDR=OFF"
+  "-DENABLE_XRANDR=OFF"
+  "-DENABLE_DRM=OFF"
+  "-DENABLE_VADRM=OFF"
+  "-DENABLE_VAX11=OFF"
+  "-DENABLE_VDPAU=OFF"
+  "-DENABLE_GIO=OFF"
+  "-DENABLE_DCONF=OFF"
+  "-DENABLE_EET=OFF"
+  "-DENABLE_DBUS=OFF"
+  "-DENABLE_SQLITE3=OFF"
+  "-DENABLE_RPM=OFF"
+  "-DENABLE_IMAGEMAGICK7=OFF"
+  "-DENABLE_IMAGEMAGICK6=OFF"
+  "-DENABLE_CHAFA=OFF"
+  "-DENABLE_EGL=OFF"
+  "-DENABLE_GLX=OFF"
+  "-DENABLE_OPENCL=OFF"
+  "-DENABLE_FREETYPE=OFF"
+  "-DENABLE_PULSE=OFF"
+  "-DENABLE_DDCUTIL=OFF"
+  "-DENABLE_ELF=OFF"
+  "-DENABLE_ZLIB=ON"
+  "-DENABLE_LUA=OFF"
+  "-DENABLE_QUICKJS=OFF"
+  "-DENABLE_LIBZFS=OFF"
+  "-DENABLE_THREADS=ON"
+  "-DMODULE_DISABLE_OPENGL=ON"
+  "-DBINARY_LINK_TYPE=dlopen"
+)
 
-  case "$PACMAN_ANDROID_TARGET" in
-    x86_64) processor_override="x86_64" ;;
-    i686) processor_override="i686" ;;
-    armhf) processor_override="armv7l" ;;
-    aarch64) processor_override="aarch64" ;;
-  esac
-
-  cmake -S "$PACMAN_ANDROID_SOURCE_WORKTREE" -B "$PACMAN_ANDROID_CMAKE_BUILD_DIR" -G Ninja \
-    -DCMAKE_TOOLCHAIN_FILE="$toolchain_file" \
-    -DANDROID_ABI="$PACMAN_ANDROID_ABI" \
-    -DANDROID_PLATFORM="android-$PACMAN_ANDROID_API_LEVEL" \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX="$PACMAN_ANDROID_PREFIX" \
-    -DCMAKE_INSTALL_SYSCONFDIR="$PACMAN_ANDROID_SYSCONFDIR" \
-    -DTARGET_DIR_ROOT="$PACMAN_ROOTDIR" \
-    -DTARGET_DIR_USR="$PACMAN_ROOTDIR/usr" \
-    -DTARGET_DIR_HOME="$PACMAN_ROOTDIR/home" \
-    -DTARGET_DIR_ETC="$PACMAN_ROOTDIR/etc" \
-    -DCMAKE_SYSTEM_PROCESSOR_OVERRIDE="$processor_override" \
-    -DBUILD_FLASHFETCH=OFF \
-    -DBUILD_TESTS=OFF \
-    -DSET_TWEAK=OFF \
-    -DINSTALL_LICENSE=ON \
-    -DENABLE_VULKAN=OFF \
-    -DENABLE_WAYLAND=OFF \
-    -DENABLE_XCB_RANDR=OFF \
-    -DENABLE_XRANDR=OFF \
-    -DENABLE_DRM=OFF \
-    -DENABLE_VADRM=OFF \
-    -DENABLE_VAX11=OFF \
-    -DENABLE_VDPAU=OFF \
-    -DENABLE_GIO=OFF \
-    -DENABLE_DCONF=OFF \
-    -DENABLE_EET=OFF \
-    -DENABLE_DBUS=OFF \
-    -DENABLE_SQLITE3=OFF \
-    -DENABLE_RPM=OFF \
-    -DENABLE_IMAGEMAGICK7=OFF \
-    -DENABLE_IMAGEMAGICK6=OFF \
-    -DENABLE_CHAFA=OFF \
-    -DENABLE_EGL=OFF \
-    -DENABLE_GLX=OFF \
-    -DENABLE_OPENCL=OFF \
-    -DENABLE_FREETYPE=OFF \
-    -DENABLE_PULSE=OFF \
-    -DENABLE_DDCUTIL=OFF \
-    -DENABLE_ELF=OFF \
-    -DENABLE_ZLIB=ON \
-    -DENABLE_LUA=OFF \
-    -DENABLE_QUICKJS=OFF \
-    -DENABLE_LIBZFS=OFF \
-    -DENABLE_THREADS=ON \
-    -DMODULE_DISABLE_OPENGL=ON \
-    -DBINARY_LINK_TYPE=dlopen
-
-  cmake --build "$PACMAN_ANDROID_CMAKE_BUILD_DIR" --parallel
-}
-
-
-pacman_android_recipe_install() {
-  DESTDIR="$PACMAN_ANDROID_ROOTFS_DIR" \
-    cmake --install "$PACMAN_ANDROID_CMAKE_BUILD_DIR"
-
+pacman_android_recipe_post_install() {
   install -Dm644 \
     "$PACMAN_ANDROID_SOURCE_WORKTREE/LICENSE" \
     "$PACMAN_ANDROID_ROOTFS_DIR/usr/share/licenses/$PACMAN_ANDROID_PKG_NAME/LICENSE.upstream"

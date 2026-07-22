@@ -53,10 +53,10 @@ What does not exist yet:
   CI workflows for builder image publication and target-matrix smoke builds.
 
 - `core-packages/`
-  Core package definitions, currently including `fastfetch` and the smoke recipe.
+  Core package definitions, currently including the smoke recipe.
 
 - `extra-packages/`
-  Optional extra packages.
+  Optional extra packages, currently including `fastfetch`.
 
 - `multilib-packages/`
   Multilib packages.
@@ -125,7 +125,7 @@ The first CI milestone is a reliable multi-architecture Android smoke package bu
 Example:
 
 ```bash
-./build-package.sh core/fastfetch aarch64
+./build-package.sh extra/fastfetch aarch64
 ```
 
 Outputs are written under:

@@ -91,6 +91,11 @@ export PACMAN_ANDROID_RECIPE_DIR="$RECIPE_DIR"
 export PACMAN_ANDROID_RECIPE_FILE="$RECIPE_FILE"
 export PACMAN_ANDROID_BUILD_ROOT="$REPO_ROOT/out/build/$PACKAGE_REPO/$PACKAGE_NAME/$TARGET"
 export PACMAN_ANDROID_BUILD_DIR="$PACMAN_ANDROID_BUILD_ROOT/work"
+export PACMAN_ANDROID_SOURCE_DIR="$PACMAN_ANDROID_BUILD_ROOT/src"
+export PACMAN_ANDROID_CMAKE_BUILD_DIR="$PACMAN_ANDROID_BUILD_ROOT/cmake-build"
+export PACMAN_ANDROID_MESON_BUILD_DIR="$PACMAN_ANDROID_BUILD_ROOT/meson-build"
+export PACMAN_ANDROID_AUTOTOOLS_BUILD_DIR="$PACMAN_ANDROID_BUILD_ROOT/autotools-build"
+export PACMAN_ANDROID_MESON_CROSS_FILE="$PACMAN_ANDROID_BUILD_ROOT/meson-cross-file.ini"
 export PACMAN_ANDROID_STAGE_ROOT="$REPO_ROOT/out/stage/$PACKAGE_REPO/$PACKAGE_NAME/$TARGET"
 export PACMAN_ANDROID_ROOTFS_DIR="$PACMAN_ANDROID_STAGE_ROOT/rootfs"
 export PACMAN_ANDROID_METADATA_DIR="$PACMAN_ANDROID_STAGE_ROOT/metadata"
@@ -113,6 +118,8 @@ declare PACMAN_ANDROID_PKG_SRCURL=""
 declare PACMAN_ANDROID_PKG_SHA256=""
 declare PACMAN_ANDROID_PKG_SOURCE_FILENAME=""
 declare PACMAN_ANDROID_PKG_SOURCE_DIRNAME=""
+declare PACMAN_ANDROID_PKG_BUILD_SYSTEM="auto"
+declare PACMAN_ANDROID_PKG_MAKE_INSTALL_TARGET="install"
 declare -a PACMAN_ANDROID_PKG_LICENSES=()
 declare -a PACMAN_ANDROID_PKG_TARGETS=()
 declare -a PACMAN_ANDROID_PKG_DEPENDS=()
@@ -121,6 +128,29 @@ declare -a PACMAN_ANDROID_PKG_CHECK_DEPENDS=()
 declare -a PACMAN_ANDROID_PKG_PROVIDES=()
 declare -a PACMAN_ANDROID_PKG_CONFLICTS=()
 declare -a PACMAN_ANDROID_PKG_REPLACES=()
+declare -a PACMAN_ANDROID_PKG_EXTRA_CONFIGURE_ARGS=()
+declare -a PACMAN_ANDROID_PKG_EXTRA_BUILD_ARGS=()
+declare -a PACMAN_ANDROID_PKG_EXTRA_INSTALL_ARGS=()
+
+pacman_android_recipe_prepare() {
+  return 0
+}
+
+pacman_android_recipe_configure() {
+  pacman_android_default_configure
+}
+
+pacman_android_recipe_build() {
+  pacman_android_default_build
+}
+
+pacman_android_recipe_install() {
+  pacman_android_default_install
+}
+
+pacman_android_recipe_post_install() {
+  return 0
+}
 
 source "$RECIPE_FILE"
 
@@ -177,8 +207,6 @@ prepare_default_source() {
   require_var PACMAN_ANDROID_PKG_SHA256
 
   export PACMAN_ANDROID_DISTFILES_DIR="$PACMAN_ANDROID_REPO_ROOT/out/distfiles"
-  export PACMAN_ANDROID_SOURCE_DIR="$PACMAN_ANDROID_BUILD_ROOT/src"
-  export PACMAN_ANDROID_CMAKE_BUILD_DIR="$PACMAN_ANDROID_BUILD_ROOT/cmake-build"
 
   mkdir -p "$PACMAN_ANDROID_DISTFILES_DIR" "$PACMAN_ANDROID_SOURCE_DIR"
 
@@ -197,7 +225,12 @@ prepare_default_source() {
 
   echo "${PACMAN_ANDROID_PKG_SHA256}  ${PACMAN_ANDROID_SOURCE_ARCHIVE}" | sha256sum --check --status
 
-  rm -rf "$PACMAN_ANDROID_SOURCE_DIR" "$PACMAN_ANDROID_CMAKE_BUILD_DIR"
+  rm -rf \
+    "$PACMAN_ANDROID_SOURCE_DIR" \
+    "$PACMAN_ANDROID_CMAKE_BUILD_DIR" \
+    "$PACMAN_ANDROID_MESON_BUILD_DIR" \
+    "$PACMAN_ANDROID_AUTOTOOLS_BUILD_DIR" \
+    "$PACMAN_ANDROID_MESON_CROSS_FILE"
   mkdir -p "$PACMAN_ANDROID_SOURCE_DIR"
   bsdtar -xf "$PACMAN_ANDROID_SOURCE_ARCHIVE" -C "$PACMAN_ANDROID_SOURCE_DIR"
 
@@ -238,6 +271,300 @@ apply_recipe_patches() {
   done
 }
 
+
+pacman_android_require_source_worktree() {
+  local build_system="${1:-build}"
+  if [[ -z "${PACMAN_ANDROID_SOURCE_WORKTREE:-}" || ! -d "${PACMAN_ANDROID_SOURCE_WORKTREE:-}" ]]; then
+    echo "cannot run default ${build_system} step without PACMAN_ANDROID_SOURCE_WORKTREE" >&2
+    echo "define PACMAN_ANDROID_PKG_SRCURL/PACMAN_ANDROID_PKG_SHA256 or override the recipe step" >&2
+    exit 1
+  fi
+}
+
+
+pacman_android_has_makefile() {
+  local directory="$1"
+  [[ -f "$directory/GNUmakefile" || -f "$directory/Makefile" || -f "$directory/makefile" ]]
+}
+
+
+pacman_android_detect_build_system() {
+  local requested="${PACMAN_ANDROID_PKG_BUILD_SYSTEM:-auto}"
+  case "$requested" in
+    ""|auto)
+      ;;
+    autotools|cmake|meson|make|ninja|none)
+      printf '%s\n' "$requested"
+      return 0
+      ;;
+    *)
+      echo "unsupported PACMAN_ANDROID_PKG_BUILD_SYSTEM: $requested" >&2
+      exit 1
+      ;;
+  esac
+
+  if [[ -z "${PACMAN_ANDROID_SOURCE_WORKTREE:-}" || ! -d "${PACMAN_ANDROID_SOURCE_WORKTREE:-}" ]]; then
+    printf 'none\n'
+    return 0
+  fi
+
+  if [[ -f "$PACMAN_ANDROID_SOURCE_WORKTREE/configure" ]]; then
+    printf 'autotools\n'
+  elif [[ -f "$PACMAN_ANDROID_SOURCE_WORKTREE/CMakeLists.txt" ]]; then
+    printf 'cmake\n'
+  elif [[ -f "$PACMAN_ANDROID_SOURCE_WORKTREE/meson.build" ]]; then
+    printf 'meson\n'
+  elif [[ -f "$PACMAN_ANDROID_SOURCE_WORKTREE/build.ninja" ]]; then
+    printf 'ninja\n'
+  elif pacman_android_has_makefile "$PACMAN_ANDROID_SOURCE_WORKTREE"; then
+    printf 'make\n'
+  else
+    printf 'none\n'
+  fi
+}
+
+
+pacman_android_resolve_build_system() {
+  if [[ -n "${PACMAN_ANDROID_BUILD_SYSTEM_RESOLVED:-}" ]]; then
+    printf '%s\n' "$PACMAN_ANDROID_BUILD_SYSTEM_RESOLVED"
+    return 0
+  fi
+
+  export PACMAN_ANDROID_BUILD_SYSTEM_RESOLVED
+  PACMAN_ANDROID_BUILD_SYSTEM_RESOLVED="$(pacman_android_detect_build_system)"
+  printf '%s\n' "$PACMAN_ANDROID_BUILD_SYSTEM_RESOLVED"
+}
+
+
+pacman_android_build_jobs() {
+  if [[ -n "${PACMAN_ANDROID_BUILD_JOBS:-}" ]]; then
+    printf '%s\n' "$PACMAN_ANDROID_BUILD_JOBS"
+    return 0
+  fi
+
+  getconf _NPROCESSORS_ONLN 2>/dev/null || printf '1\n'
+}
+
+
+pacman_android_target_cpu_family() {
+  case "$PACMAN_ANDROID_TARGET" in
+    x86_64) printf 'x86_64\n' ;;
+    i686) printf 'x86\n' ;;
+    armhf) printf 'arm\n' ;;
+    aarch64) printf 'aarch64\n' ;;
+    *)
+      echo "unsupported target for meson cpu family: $PACMAN_ANDROID_TARGET" >&2
+      exit 1
+      ;;
+  esac
+}
+
+
+pacman_android_target_cpu() {
+  case "$PACMAN_ANDROID_TARGET" in
+    x86_64) printf 'x86_64\n' ;;
+    i686) printf 'i686\n' ;;
+    armhf) printf 'armv7\n' ;;
+    aarch64) printf 'aarch64\n' ;;
+    *)
+      echo "unsupported target for meson cpu: $PACMAN_ANDROID_TARGET" >&2
+      exit 1
+      ;;
+  esac
+}
+
+
+pacman_android_default_build_worktree() {
+  local build_system
+  build_system="${1:-$(pacman_android_resolve_build_system)}"
+
+  case "$build_system" in
+    autotools) printf '%s\n' "$PACMAN_ANDROID_AUTOTOOLS_BUILD_DIR" ;;
+    cmake) printf '%s\n' "$PACMAN_ANDROID_CMAKE_BUILD_DIR" ;;
+    meson) printf '%s\n' "$PACMAN_ANDROID_MESON_BUILD_DIR" ;;
+    make|ninja) printf '%s\n' "${PACMAN_ANDROID_SOURCE_WORKTREE:-}" ;;
+    none) printf '\n' ;;
+    *)
+      echo "unsupported build system: $build_system" >&2
+      exit 1
+      ;;
+  esac
+}
+
+
+pacman_android_default_configure_autotools() {
+  pacman_android_require_source_worktree autotools
+
+  rm -rf "$PACMAN_ANDROID_AUTOTOOLS_BUILD_DIR"
+  mkdir -p "$PACMAN_ANDROID_AUTOTOOLS_BUILD_DIR"
+
+  (
+    cd "$PACMAN_ANDROID_AUTOTOOLS_BUILD_DIR"
+    bash "$PACMAN_ANDROID_SOURCE_WORKTREE/configure" \
+      --host="$PACMAN_ANDROID_LIBRARY_TRIPLE" \
+      --prefix="$PACMAN_ANDROID_PREFIX" \
+      --sysconfdir="$PACMAN_ANDROID_SYSCONFDIR" \
+      --disable-dependency-tracking \
+      "${PACMAN_ANDROID_PKG_EXTRA_CONFIGURE_ARGS[@]}"
+  )
+}
+
+
+pacman_android_default_configure_cmake() {
+  pacman_android_require_source_worktree cmake
+
+  rm -rf "$PACMAN_ANDROID_CMAKE_BUILD_DIR"
+  mkdir -p "$PACMAN_ANDROID_CMAKE_BUILD_DIR"
+
+  cmake -S "$PACMAN_ANDROID_SOURCE_WORKTREE" -B "$PACMAN_ANDROID_CMAKE_BUILD_DIR" -G Ninja \
+    -DCMAKE_TOOLCHAIN_FILE="$PACMAN_ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake" \
+    -DCMAKE_AR="$PACMAN_ANDROID_AR" \
+    -DCMAKE_RANLIB="$PACMAN_ANDROID_RANLIB" \
+    -DCMAKE_STRIP="$PACMAN_ANDROID_STRIP" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_C_FLAGS="$CFLAGS $CPPFLAGS" \
+    -DCMAKE_CXX_FLAGS="$CXXFLAGS $CPPFLAGS" \
+    -DCMAKE_EXE_LINKER_FLAGS="$LDFLAGS" \
+    -DCMAKE_SHARED_LINKER_FLAGS="$LDFLAGS" \
+    -DCMAKE_INSTALL_PREFIX="$PACMAN_ANDROID_PREFIX" \
+    -DCMAKE_INSTALL_SYSCONFDIR="$PACMAN_ANDROID_SYSCONFDIR" \
+    -DCMAKE_FIND_ROOT_PATH="$PACMAN_ANDROID_SYSROOT" \
+    -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
+    -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
+    -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY \
+    -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY \
+    -DCMAKE_MAKE_PROGRAM="$(command -v ninja)" \
+    -DANDROID_ABI="$PACMAN_ANDROID_ABI" \
+    -DANDROID_PLATFORM="android-$PACMAN_ANDROID_API_LEVEL" \
+    "${PACMAN_ANDROID_PKG_EXTRA_CONFIGURE_ARGS[@]}"
+}
+
+
+pacman_android_default_configure_meson() {
+  pacman_android_require_source_worktree meson
+
+  rm -rf "$PACMAN_ANDROID_MESON_BUILD_DIR"
+  mkdir -p "$PACMAN_ANDROID_MESON_BUILD_DIR"
+
+  cat >"$PACMAN_ANDROID_MESON_CROSS_FILE" <<EOF
+[binaries]
+c = '$PACMAN_ANDROID_CC'
+cpp = '$PACMAN_ANDROID_CXX'
+ar = '$PACMAN_ANDROID_AR'
+strip = '$PACMAN_ANDROID_STRIP'
+pkgconfig = 'pkg-config'
+
+[properties]
+sys_root = '$PACMAN_ANDROID_SYSROOT'
+
+[host_machine]
+system = 'android'
+cpu_family = '$(pacman_android_target_cpu_family)'
+cpu = '$(pacman_android_target_cpu)'
+endian = 'little'
+EOF
+
+  meson setup \
+    "$PACMAN_ANDROID_MESON_BUILD_DIR" \
+    "$PACMAN_ANDROID_SOURCE_WORKTREE" \
+    --cross-file "$PACMAN_ANDROID_MESON_CROSS_FILE" \
+    --prefix "$PACMAN_ANDROID_PREFIX" \
+    --sysconfdir "$PACMAN_ANDROID_SYSCONFDIR" \
+    --buildtype release \
+    "${PACMAN_ANDROID_PKG_EXTRA_CONFIGURE_ARGS[@]}"
+}
+
+
+pacman_android_default_configure() {
+  local build_system
+  build_system="$(pacman_android_resolve_build_system)"
+
+  case "$build_system" in
+    none|make|ninja)
+      return 0
+      ;;
+    autotools)
+      pacman_android_default_configure_autotools
+      ;;
+    cmake)
+      pacman_android_default_configure_cmake
+      ;;
+    meson)
+      pacman_android_default_configure_meson
+      ;;
+    *)
+      echo "unsupported build system during configure: $build_system" >&2
+      exit 1
+      ;;
+  esac
+}
+
+
+pacman_android_default_build() {
+  local build_system jobs build_worktree
+  build_system="$(pacman_android_resolve_build_system)"
+  jobs="$(pacman_android_build_jobs)"
+  build_worktree="$(pacman_android_default_build_worktree "$build_system")"
+
+  case "$build_system" in
+    none)
+      echo "could not infer a default build system for $PACMAN_ANDROID_PACKAGE_REF" >&2
+      echo "define PACMAN_ANDROID_PKG_BUILD_SYSTEM or override pacman_android_recipe_build" >&2
+      exit 1
+      ;;
+    cmake)
+      cmake --build "$PACMAN_ANDROID_CMAKE_BUILD_DIR" --parallel "$jobs" "${PACMAN_ANDROID_PKG_EXTRA_BUILD_ARGS[@]}"
+      ;;
+    meson|ninja)
+      ninja -C "$build_worktree" -j "$jobs" "${PACMAN_ANDROID_PKG_EXTRA_BUILD_ARGS[@]}"
+      ;;
+    autotools|make)
+      make -C "$build_worktree" -j "$jobs" "${PACMAN_ANDROID_PKG_EXTRA_BUILD_ARGS[@]}"
+      ;;
+    *)
+      echo "unsupported build system during build: $build_system" >&2
+      exit 1
+      ;;
+  esac
+}
+
+
+pacman_android_default_install() {
+  local build_system build_worktree
+  build_system="$(pacman_android_resolve_build_system)"
+  build_worktree="$(pacman_android_default_build_worktree "$build_system")"
+
+  case "$build_system" in
+    none)
+      echo "could not infer a default install step for $PACMAN_ANDROID_PACKAGE_REF" >&2
+      echo "define PACMAN_ANDROID_PKG_BUILD_SYSTEM or override pacman_android_recipe_install" >&2
+      exit 1
+      ;;
+    cmake)
+      DESTDIR="$PACMAN_ANDROID_ROOTFS_DIR" \
+        cmake --install "$PACMAN_ANDROID_CMAKE_BUILD_DIR" "${PACMAN_ANDROID_PKG_EXTRA_INSTALL_ARGS[@]}"
+      ;;
+    meson)
+      DESTDIR="$PACMAN_ANDROID_ROOTFS_DIR" \
+        meson install -C "$PACMAN_ANDROID_MESON_BUILD_DIR" "${PACMAN_ANDROID_PKG_EXTRA_INSTALL_ARGS[@]}"
+      ;;
+    ninja)
+      DESTDIR="$PACMAN_ANDROID_ROOTFS_DIR" \
+        ninja -C "$build_worktree" "${PACMAN_ANDROID_PKG_EXTRA_INSTALL_ARGS[@]}" install
+      ;;
+    autotools|make)
+      make -C "$build_worktree" -j 1 \
+        DESTDIR="$PACMAN_ANDROID_ROOTFS_DIR" \
+        "${PACMAN_ANDROID_PKG_EXTRA_INSTALL_ARGS[@]}" \
+        "$PACMAN_ANDROID_PKG_MAKE_INSTALL_TARGET"
+      ;;
+    *)
+      echo "unsupported build system during install: $build_system" >&2
+      exit 1
+      ;;
+  esac
+}
+
 require_var PACMAN_ANDROID_PKG_NAME
 require_var PACMAN_ANDROID_PKG_VERSION
 require_var PACMAN_ANDROID_PKG_REVERSION
@@ -245,11 +572,6 @@ require_var PACMAN_ANDROID_PKG_DESCRIPTION
 
 if [[ ${#PACMAN_ANDROID_PKG_TARGETS[@]} -gt 0 ]] && ! in_array "$TARGET" "${PACMAN_ANDROID_PKG_TARGETS[@]}"; then
   echo "target $TARGET is not supported by package $PACMAN_ANDROID_PKG_NAME" >&2
-  exit 1
-fi
-
-if ! declare -F pacman_android_recipe_install >/dev/null; then
-  echo "recipe must define pacman_android_recipe_install" >&2
   exit 1
 fi
 
@@ -275,6 +597,7 @@ target=$PACMAN_ANDROID_TARGET
 package_arch=$PACMAN_ANDROID_PACKAGE_ARCH
 version=$PACMAN_ANDROID_PKG_FULL_VERSION
 srcurl=$PACMAN_ANDROID_PKG_SRCURL
+build_system=$PACMAN_ANDROID_PKG_BUILD_SYSTEM
 recipe=$PACMAN_ANDROID_RECIPE_FILE
 package_path=$PACMAN_ANDROID_PACKAGE_PATH
 ndk_root=$PACMAN_ANDROID_NDK_ROOT
@@ -285,17 +608,14 @@ fi
 
 prepare_default_source
 
-if declare -F pacman_android_recipe_prepare >/dev/null; then
-  pacman_android_recipe_prepare
-fi
+pacman_android_recipe_prepare
 
 apply_recipe_patches
 
-if declare -F pacman_android_recipe_build >/dev/null; then
-  pacman_android_recipe_build
-fi
-
+pacman_android_recipe_configure
+pacman_android_recipe_build
 pacman_android_recipe_install
+pacman_android_recipe_post_install
 
 if [[ ! -d "$PACMAN_ANDROID_ROOTFS_DIR" ]] || [[ -z "$(find "$PACMAN_ANDROID_ROOTFS_DIR" -mindepth 1 -print -quit)" ]]; then
   echo "rootfs staging directory is empty: $PACMAN_ANDROID_ROOTFS_DIR" >&2

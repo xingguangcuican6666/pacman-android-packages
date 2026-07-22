@@ -17,6 +17,7 @@ RUN apt-get update \
         lld \
         llvm \
         make \
+        meson \
         ninja-build \
         patch \
         patchelf \
