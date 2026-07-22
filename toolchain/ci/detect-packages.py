@@ -41,7 +41,7 @@ def discover_active_collections(repo_root: Path) -> list[str]:
 def active_ref_from_path(path: str) -> dict | None:
     parts = Path(path).parts
     if len(parts) < 2:
-      return None
+        return None
     collection = parts[0]
     repo = collection_repo(collection)
     if not repo:
@@ -55,6 +55,10 @@ def disabled_package_from_path(path: str) -> str:
     if len(parts) < 2 or parts[0] != DISABLED_COLLECTION:
         return ""
     return parts[1]
+
+
+def builder_path(path: str) -> bool:
+    return Path(path).parts[:1] == ("docker",)
 
 
 def active_package_exists(repo_root: Path, ref: dict) -> bool:
@@ -118,10 +122,11 @@ def parse_change_records(lines: list[str]) -> list[dict]:
     return records
 
 
-def derive_refs_from_changes(records: list[dict], repo_root: Path) -> tuple[list[dict], list[str]]:
+def derive_refs_from_changes(records: list[dict], repo_root: Path) -> tuple[list[dict], list[str], bool]:
     current_refs = {}
     old_refs = {}
     removals = set()
+    builder_changed = False
 
     for record in records:
         status = record["status"]
@@ -140,10 +145,14 @@ def derive_refs_from_changes(records: list[dict], repo_root: Path) -> tuple[list
             old_ref = active_ref_from_path(previous)
             if old_ref:
                 old_refs[(old_ref["collection"], old_ref["package"])] = old_ref
+            if builder_path(previous):
+                builder_changed = True
 
         disabled_package = disabled_package_from_path(current)
         if disabled_package:
             removals.add(disabled_package)
+        if current and builder_path(current):
+            builder_changed = True
 
     for key, old_ref in old_refs.items():
         if key not in current_refs:
@@ -151,7 +160,7 @@ def derive_refs_from_changes(records: list[dict], repo_root: Path) -> tuple[list
 
     build_refs = sorted(current_refs.values(), key=lambda ref: (ref["repo"], ref["package"]))
     removal_list = sorted(removals)
-    return build_refs, removal_list
+    return build_refs, removal_list, builder_changed
 
 
 def build_matrix(refs: list[dict]) -> list[dict]:
@@ -171,17 +180,19 @@ def build_matrix(refs: list[dict]) -> list[dict]:
     return matrix
 
 
-def write_outputs(path: str, refs: list[dict], removals: list[str]) -> None:
+def write_outputs(path: str, refs: list[dict], removals: list[str], builder_changed: bool) -> None:
     payload = {
         "has_packages": bool(refs),
         "packages": refs,
         "matrix": build_matrix(refs),
         "remove_packages": removals,
         "has_removals": bool(removals),
+        "builder_changed": builder_changed,
     }
     lines = [
         f'has_packages={"true" if payload["has_packages"] else "false"}',
         f'has_removals={"true" if payload["has_removals"] else "false"}',
+        f'builder_changed={"true" if payload["builder_changed"] else "false"}',
         f'packages={json.dumps(payload["packages"], separators=(",", ":"))}',
         f'matrix={json.dumps(payload["matrix"], separators=(",", ":"))}',
         f'remove_packages={json.dumps(payload["remove_packages"], separators=(",", ":"))}',
@@ -189,11 +200,12 @@ def write_outputs(path: str, refs: list[dict], removals: list[str]) -> None:
     Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def write_plan(path: str, refs: list[dict], removals: list[str]) -> None:
+def write_plan(path: str, refs: list[dict], removals: list[str], builder_changed: bool) -> None:
     plan = {
         "build_packages": refs,
         "build_matrix": build_matrix(refs),
         "remove_packages": removals,
+        "builder_changed": builder_changed,
     }
     Path(path).write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
@@ -206,19 +218,21 @@ def main() -> None:
     if args.packages:
         refs = parse_csv_refs(args.packages, active_collections, repo_root)
         removals = []
+        builder_changed = False
     else:
-        refs, removals = derive_refs_from_changes(parse_change_records(list(sys.stdin)), repo_root)
+        refs, removals, builder_changed = derive_refs_from_changes(parse_change_records(list(sys.stdin)), repo_root)
 
     if args.github_output:
-        write_outputs(args.github_output, refs, removals)
+        write_outputs(args.github_output, refs, removals, builder_changed)
     if args.plan_file:
-        write_plan(args.plan_file, refs, removals)
+        write_plan(args.plan_file, refs, removals, builder_changed)
     if not args.github_output and not args.plan_file:
         print(
             json.dumps(
                 {
                     "has_packages": bool(refs),
                     "has_removals": bool(removals),
+                    "builder_changed": builder_changed,
                     "packages": refs,
                     "matrix": build_matrix(refs),
                     "remove_packages": removals,

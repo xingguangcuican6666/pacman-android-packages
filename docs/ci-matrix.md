@@ -19,6 +19,7 @@ The builder image is intentionally host-oriented:
 - Includes generic build dependencies such as `bash`, `curl`, `git`, `unzip`, `llvm`, `clang`, `ninja`, `pkg-config`, `zstd`
 - Does not bake package recipes into the image
 - Leaves Android NDK acquisition to the repository toolchain layer
+- Is rebuilt only when `docker/` changes; otherwise package jobs reuse the published GHCR image
 
 This keeps the image reusable while still supporting future repo-local toolchain logic.
 
