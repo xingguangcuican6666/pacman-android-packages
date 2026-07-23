@@ -294,3 +294,19 @@ EOF
       "${PACMAN_ANDROID_PKG_EXTRA_CONFIGURE_ARGS[@]}"
   )
 }
+
+pacman_android_recipe_post_install() {
+  local libdl_real
+  local libdir
+
+  libdl_real="$(find "$PACMAN_ANDROID_ROOTFS_DIR" -maxdepth 2 -type f -name 'libdl.so.2' | head -n1)"
+  if [[ -n "$libdl_real" ]]; then
+    libdir="$(dirname "$libdl_real")"
+    if [[ ! -e "$libdir/libdl.so" ]]; then
+      (
+        cd "$libdir"
+        ln -s libdl.so.2 libdl.so
+      )
+    fi
+  fi
+}
