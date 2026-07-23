@@ -22,6 +22,7 @@ pacman_android_recipe_prepare() {
 
 pacman_android_recipe_configure() {
   pacman_android_require_source_worktree glibc
+  pacman_android_prepare_kernel_headers
 
   rm -rf "$PACMAN_ANDROID_AUTOTOOLS_BUILD_DIR"
   mkdir -p "$PACMAN_ANDROID_AUTOTOOLS_BUILD_DIR"
@@ -36,7 +37,7 @@ pacman_android_recipe_configure() {
       --host="$PACMAN_ANDROID_LIBRARY_TRIPLE" \
       --prefix="$PACMAN_ANDROID_PREFIX" \
       --sysconfdir="$PACMAN_ANDROID_SYSCONFDIR" \
-      --with-headers="$PACMAN_ANDROID_SYSROOT_HEADERS_DIR" \
+      --with-headers="$PACMAN_ANDROID_KERNEL_HEADERS_DIR" \
       --enable-kernel=3.2 \
       --disable-werror \
       "${PACMAN_ANDROID_PKG_EXTRA_CONFIGURE_ARGS[@]}"

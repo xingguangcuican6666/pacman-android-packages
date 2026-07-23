@@ -109,6 +109,7 @@ export PACMAN_ANDROID_MESON_CROSS_FILE="$PACMAN_ANDROID_BUILD_ROOT/meson-cross-f
 export PACMAN_ANDROID_SYSROOT_INCLUDE_DIR="$PACMAN_ANDROID_SYSROOT/usr/include"
 export PACMAN_ANDROID_SYSROOT_ARCH_INCLUDE_DIR="$PACMAN_ANDROID_SYSROOT_INCLUDE_DIR/$PACMAN_ANDROID_LIBRARY_TRIPLE"
 export PACMAN_ANDROID_SYSROOT_HEADERS_DIR="$PACMAN_ANDROID_BUILD_ROOT/sysroot-headers"
+export PACMAN_ANDROID_KERNEL_HEADERS_DIR="$PACMAN_ANDROID_BUILD_ROOT/kernel-headers"
 export PACMAN_ANDROID_STAGE_ROOT="$REPO_ROOT/out/stage/$PACKAGE_REPO/$PACKAGE_NAME/$TARGET"
 export PACMAN_ANDROID_ROOTFS_DIR="$PACMAN_ANDROID_STAGE_ROOT/rootfs"
 export PACMAN_ANDROID_METADATA_DIR="$PACMAN_ANDROID_STAGE_ROOT/metadata"
@@ -267,6 +268,18 @@ pacman_android_export_source_dirname() {
 }
 
 
+pacman_android_copy_header_tree() {
+  local source_dir="$1"
+  local header_name="$2"
+
+  if [[ ! -e "$source_dir/$header_name" ]]; then
+    return 0
+  fi
+
+  cp -a "$source_dir/$header_name" "$3"
+}
+
+
 pacman_android_prepare_sysroot_headers() {
   if [[ ! -d "$PACMAN_ANDROID_SYSROOT_INCLUDE_DIR" ]]; then
     echo "missing NDK sysroot include directory: $PACMAN_ANDROID_SYSROOT_INCLUDE_DIR" >&2
@@ -283,6 +296,34 @@ pacman_android_prepare_sysroot_headers() {
 
   cp -a "$PACMAN_ANDROID_SYSROOT_INCLUDE_DIR/." "$PACMAN_ANDROID_SYSROOT_HEADERS_DIR/"
   cp -a "$PACMAN_ANDROID_SYSROOT_ARCH_INCLUDE_DIR/." "$PACMAN_ANDROID_SYSROOT_HEADERS_DIR/"
+}
+
+
+pacman_android_prepare_kernel_headers() {
+  if [[ ! -d "$PACMAN_ANDROID_SYSROOT_INCLUDE_DIR" ]]; then
+    echo "missing NDK sysroot include directory: $PACMAN_ANDROID_SYSROOT_INCLUDE_DIR" >&2
+    exit 1
+  fi
+
+  if [[ ! -d "$PACMAN_ANDROID_SYSROOT_ARCH_INCLUDE_DIR" ]]; then
+    echo "missing arch-specific NDK include directory: $PACMAN_ANDROID_SYSROOT_ARCH_INCLUDE_DIR" >&2
+    exit 1
+  fi
+
+  rm -rf "$PACMAN_ANDROID_KERNEL_HEADERS_DIR"
+  mkdir -p "$PACMAN_ANDROID_KERNEL_HEADERS_DIR"
+
+  pacman_android_copy_header_tree "$PACMAN_ANDROID_SYSROOT_INCLUDE_DIR" "linux" "$PACMAN_ANDROID_KERNEL_HEADERS_DIR"
+  pacman_android_copy_header_tree "$PACMAN_ANDROID_SYSROOT_INCLUDE_DIR" "asm-generic" "$PACMAN_ANDROID_KERNEL_HEADERS_DIR"
+  pacman_android_copy_header_tree "$PACMAN_ANDROID_SYSROOT_INCLUDE_DIR" "drm" "$PACMAN_ANDROID_KERNEL_HEADERS_DIR"
+  pacman_android_copy_header_tree "$PACMAN_ANDROID_SYSROOT_INCLUDE_DIR" "misc" "$PACMAN_ANDROID_KERNEL_HEADERS_DIR"
+  pacman_android_copy_header_tree "$PACMAN_ANDROID_SYSROOT_INCLUDE_DIR" "mtd" "$PACMAN_ANDROID_KERNEL_HEADERS_DIR"
+  pacman_android_copy_header_tree "$PACMAN_ANDROID_SYSROOT_INCLUDE_DIR" "rdma" "$PACMAN_ANDROID_KERNEL_HEADERS_DIR"
+  pacman_android_copy_header_tree "$PACMAN_ANDROID_SYSROOT_INCLUDE_DIR" "scsi" "$PACMAN_ANDROID_KERNEL_HEADERS_DIR"
+  pacman_android_copy_header_tree "$PACMAN_ANDROID_SYSROOT_INCLUDE_DIR" "sound" "$PACMAN_ANDROID_KERNEL_HEADERS_DIR"
+  pacman_android_copy_header_tree "$PACMAN_ANDROID_SYSROOT_INCLUDE_DIR" "video" "$PACMAN_ANDROID_KERNEL_HEADERS_DIR"
+  pacman_android_copy_header_tree "$PACMAN_ANDROID_SYSROOT_INCLUDE_DIR" "xen" "$PACMAN_ANDROID_KERNEL_HEADERS_DIR"
+  pacman_android_copy_header_tree "$PACMAN_ANDROID_SYSROOT_ARCH_INCLUDE_DIR" "asm" "$PACMAN_ANDROID_KERNEL_HEADERS_DIR"
 }
 
 prepare_default_source() {
@@ -909,8 +950,6 @@ PACMAN_ANDROID_DISTDIR=$PACMAN_ANDROID_DISTDIR
 EOF
   exit 0
 fi
-
-pacman_android_prepare_sysroot_headers
 
 prepare_default_source
 bootstrap_local_dependencies

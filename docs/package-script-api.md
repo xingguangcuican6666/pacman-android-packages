@@ -37,7 +37,8 @@ These are the supported helpers recipes may call.
 - `pacman_android_target_cpu_family`: Meson CPU family mapping for the current target.
 - `pacman_android_target_cpu`: Meson CPU mapping for the current target.
 - `pacman_android_export_source_dirname`: Refresh `PACMAN_ANDROID_PKG_SOURCE_DIRNAME` from the detected source worktree.
-- `pacman_android_prepare_sysroot_headers`: Merge generic NDK headers with target arch headers into a recipe-visible overlay.
+- `pacman_android_prepare_sysroot_headers`: Merge generic NDK headers with target arch headers into a full sysroot header overlay.
+- `pacman_android_prepare_kernel_headers`: Build a kernel-only header overlay from the NDK UAPI trees.
 - `pacman_android_default_configure_autotools`: Default autotools configure helper.
 - `pacman_android_default_configure_cmake`: Default CMake configure helper.
 - `pacman_android_default_configure_meson`: Default Meson configure helper.
@@ -61,7 +62,8 @@ These are the supported helpers recipes may call.
 - `PACMAN_ANDROID_SYSROOT`: Target sysroot path / 目标 sysroot。
 - `PACMAN_ANDROID_SYSROOT_INCLUDE_DIR`: Generic NDK include directory / 通用 NDK 头文件目录。
 - `PACMAN_ANDROID_SYSROOT_ARCH_INCLUDE_DIR`: Arch-specific NDK include directory / 架构专用 NDK 头文件目录。
-- `PACMAN_ANDROID_SYSROOT_HEADERS_DIR`: Builder-generated overlay that merges generic and arch-specific NDK headers / builder 生成的通用与架构头文件合并视图。
+- `PACMAN_ANDROID_SYSROOT_HEADERS_DIR`: Builder-generated full overlay that merges generic and arch-specific NDK headers / builder 生成的完整 NDK 头文件合并视图。
+- `PACMAN_ANDROID_KERNEL_HEADERS_DIR`: Builder-generated kernel UAPI overlay for packages such as `glibc` / builder 生成的内核 UAPI 头文件视图。
 - `PACMAN_ANDROID_CC`, `PACMAN_ANDROID_CXX`, `PACMAN_ANDROID_AR`, `PACMAN_ANDROID_RANLIB`, `PACMAN_ANDROID_STRIP`, `PACMAN_ANDROID_LD`, `PACMAN_ANDROID_NM`, `PACMAN_ANDROID_READELF`, `PACMAN_ANDROID_OBJCOPY`, `PACMAN_ANDROID_OBJDUMP`: Absolute paths to the toolchain binaries / 工具链二进制绝对路径。
 - `PACMAN_ANDROID_COMMON_CFLAGS`: Default target C flags / 默认目标 CFLAGS。
 - `PACMAN_ANDROID_COMMON_LDFLAGS`: Default target linker flags / 默认目标 LDFLAGS。
