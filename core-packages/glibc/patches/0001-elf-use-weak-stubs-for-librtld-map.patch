@@ -1,0 +1,10 @@
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -1511,7 +1511,7 @@ $(objpfx)librtld.map: $(objpfx)dl-allobjs.os $(common-objpfx)libc_pic.a
+ 	@-rm -f $@T
+ 	for symbol in $(rtld-stubbed-symbols); do \
+-		echo ".globl $$symbol"; \
++		echo ".weak $$symbol"; \
+ 		echo "$$symbol:"; \
+ 	done | $(CC) -o $@T.o $(ASFLAGS) -c -x assembler -
+ 	$(reloc-link) -o $@.o $@T.o '-Wl,-(' $^ -lgcc '-Wl,-)' -Wl,-Map,$@T
