@@ -29,6 +29,9 @@ pacman_android_recipe_prepare() {
     x86_64|i686)
       glibc_extra_cflags+=(-fno-emulated-tls -mlong-double-80)
       ;;
+    armhf)
+      glibc_extra_cflags+=(-fno-emulated-tls)
+      ;;
     aarch64)
       glibc_extra_cflags+=(-fno-emulated-tls -mno-outline-atomics)
       ;;
@@ -91,6 +94,22 @@ memfd_create (const char *name, unsigned int flags)
   return -1;
 }
 EOF
+      ;;
+    armhf)
+      local glibc_makefile="$glibc_src/elf/Makefile"
+      local pointer_guard="$glibc_src/sysdeps/arm/pointer_guard.h"
+
+      if ! grep -q '^rtld-csu +=errno\.os$' "$glibc_makefile"; then
+        awk '/done > \$@T/ {
+               print
+               print "\tprintf '\''%s\\n'\'' '\''rtld-csu +=errno.os'\'' >> $@T"
+               next
+             }
+             { print }' "$glibc_makefile" > "$glibc_makefile.new"
+        mv -f "$glibc_makefile.new" "$glibc_makefile"
+      fi
+
+      perl -0pi -e 's@# else\nextern uintptr_t __pointer_chk_guard_local attribute_relro attribute_hidden;@# else\n#  include <stdint.h>\nextern uintptr_t __pointer_chk_guard_local attribute_relro attribute_hidden;@' "$pointer_guard"
       ;;
     x86_64|i686)
       local glibc_makefile="$glibc_src/elf/Makefile"
