@@ -53,7 +53,7 @@ What does not exist yet:
   CI workflows for builder image publication and target-matrix smoke builds.
 
 - `core-packages/`
-  Core package definitions, currently including the smoke recipe.
+  Core package definitions, currently including the smoke recipe and Linux API headers.
 
 - `extra-packages/`
   Optional extra packages, currently including `fastfetch`.
