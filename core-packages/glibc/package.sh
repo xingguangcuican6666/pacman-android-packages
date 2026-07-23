@@ -29,6 +29,7 @@ pacman_android_recipe_configure() {
 
   local build_triple
   local compiler_rt_builtins
+  local libgcc_compat_dir
   build_triple="$(gcc -dumpmachine 2>/dev/null || cc -dumpmachine)"
   compiler_rt_builtins="$("$CC" -rtlib=compiler-rt --print-libgcc-file-name)"
 
@@ -37,14 +38,15 @@ pacman_android_recipe_configure() {
     exit 1
   fi
 
+  libgcc_compat_dir="$PACMAN_ANDROID_AUTOTOOLS_BUILD_DIR/libgcc-compat"
+  rm -rf "$libgcc_compat_dir"
+  mkdir -p "$libgcc_compat_dir"
+  ln -s "$compiler_rt_builtins" "$libgcc_compat_dir/libgcc.a"
+
   (
     cd "$PACMAN_ANDROID_AUTOTOOLS_BUILD_DIR"
     cat > configparms <<EOF
-gnulib = $compiler_rt_builtins
-gnulib-tests = $compiler_rt_builtins
-static-gnulib = $compiler_rt_builtins
-static-gnulib-tests = $compiler_rt_builtins
-libc.so-gnulib = $compiler_rt_builtins
+sysdep-LDFLAGS += -L$libgcc_compat_dir
 EOF
 
     bash "$PACMAN_ANDROID_SOURCE_WORKTREE/configure" \
