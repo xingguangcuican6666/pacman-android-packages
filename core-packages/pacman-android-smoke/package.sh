@@ -3,6 +3,7 @@ PACMAN_ANDROID_PKG_VERSION="0.1.0"
 PACMAN_ANDROID_PKG_REVERSION="1"
 PACMAN_ANDROID_PKG_DESCRIPTION="Minimal Android-native smoke package for pacman-android-packages"
 PACMAN_ANDROID_PKG_URL="https://github.com/xingguangcuican6666/pacman-android-packages"
+PACMAN_ANDROID_PKG_MAINTAINER="xingguangcuican6666"
 PACMAN_ANDROID_PKG_LICENSES=("MIT")
 PACMAN_ANDROID_PKG_TARGETS=("x86_64" "i686" "armhf" "aarch64")
 

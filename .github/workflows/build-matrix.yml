@@ -36,6 +36,9 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Validate recipe maintainers
+        run: bash ./toolchain/ci/check-maintainers.sh
+
       - name: Detect changed package directories
         id: detect
         env:

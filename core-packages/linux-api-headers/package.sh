@@ -3,6 +3,7 @@ PACMAN_ANDROID_PKG_VERSION="7.1"
 PACMAN_ANDROID_PKG_REVERSION="1"
 PACMAN_ANDROID_PKG_DESCRIPTION="Kernel headers sanitized for use in userspace"
 PACMAN_ANDROID_PKG_URL="https://www.kernel.org/"
+PACMAN_ANDROID_PKG_MAINTAINER="xingguangcuican6666"
 PACMAN_ANDROID_PKG_LICENSES=("GPL-2.0-only")
 PACMAN_ANDROID_PKG_TARGETS=("x86_64" "i686" "armhf" "aarch64")
 PACMAN_ANDROID_PKG_SRCURL="https://www.kernel.org/pub/linux/kernel/v${PACMAN_ANDROID_PKG_VERSION%%.*}.x/linux-${PACMAN_ANDROID_PKG_VERSION}.tar.xz"

@@ -193,4 +193,4 @@ The builder currently emits:
 - matching `.PKGINFO`
 - matching `.BUILDINFO`
 - matching `.MTREE`
-- a simple `.manifest`
+- a simple `.manifest` with package and maintainer metadata
