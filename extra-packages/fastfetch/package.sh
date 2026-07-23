@@ -3,6 +3,7 @@ PACMAN_ANDROID_PKG_VERSION="2.66.0"
 PACMAN_ANDROID_PKG_REVERSION="3"
 PACMAN_ANDROID_PKG_DESCRIPTION="Fast neofetch-like system information tool"
 PACMAN_ANDROID_PKG_URL="https://github.com/fastfetch-cli/fastfetch"
+PACMAN_ANDROID_PKG_MAINTAINER="xingguangcuican6666"
 PACMAN_ANDROID_PKG_LICENSES=("MIT")
 PACMAN_ANDROID_PKG_TARGETS=("x86_64" "i686" "armhf" "aarch64")
 PACMAN_ANDROID_PKG_SRCURL="https://github.com/fastfetch-cli/fastfetch/archive/refs/tags/${PACMAN_ANDROID_PKG_VERSION}.tar.gz"

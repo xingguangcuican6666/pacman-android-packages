@@ -110,6 +110,7 @@ These are the supported helpers recipes may call.
 - `PACMAN_ANDROID_PKG_DESCRIPTION`: Package description / 包描述。
 - `PACMAN_ANDROID_PKG_URL`: Upstream project URL / 上游项目网址。
 - `PACMAN_ANDROID_PKG_BASE`: Package base name / 包基础名。
+- `PACMAN_ANDROID_PKG_MAINTAINER`: Recipe maintainer identity / 配方维护者标识。
 - `PACMAN_ANDROID_PKG_PACKAGER`: Packager identity / 打包者信息。
 - `PACMAN_ANDROID_PKG_SRCURL`: Source archive URL / 源码归档下载地址。
 - `PACMAN_ANDROID_PKG_SHA256`: Source archive SHA256 / 源码归档 SHA256。

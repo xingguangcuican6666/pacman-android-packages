@@ -3,6 +3,7 @@ PACMAN_ANDROID_PKG_VERSION="2.43.9000"
 PACMAN_ANDROID_PKG_REVERSION="1"
 PACMAN_ANDROID_PKG_DESCRIPTION="The GNU C Library provides many of the low-level components used directly by programs written in the C or C++ languages."
 PACMAN_ANDROID_PKG_URL="https://sourceware.org/git/glibc.git"
+PACMAN_ANDROID_PKG_MAINTAINER="xingguangcuican6666"
 PACMAN_ANDROID_PKG_LICENSES=("MIT")
 PACMAN_ANDROID_PKG_TARGETS=("x86_64" "i686" "armhf" "aarch64")
 PACMAN_ANDROID_PKG_BUILD_DEPENDS=("core/linux-api-headers")
