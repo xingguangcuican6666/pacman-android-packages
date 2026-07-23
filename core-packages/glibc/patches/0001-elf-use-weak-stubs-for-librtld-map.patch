@@ -26,15 +26,5 @@
  	done | $(CC) -o $@T.o $(ASFLAGS) -c -x assembler -
 -	$(reloc-link) -o $@.o $@T.o '-Wl,-(' $^ -lgcc '-Wl,-)' -Wl,-Map,$@T
 +	$(reloc-link) -o $@.o $@T.o $(foreach symbol,$(rtld-stubbed-symbols),-Wl$(comma)--defsym=$(symbol)=0) '-Wl,-(' $^ -lgcc '-Wl,-)' -Wl,-Map,$@T
- 	rm -f %@T.o $@.o
- 	mv -f $@T $@
---- a/sysdeps/unix/sysv/linux/aarch64/pointer_guard.h
-+++ b/sysdeps/unix/sysv/linux/aarch64/pointer_guard.h
-@@ -30,6 +30,7 @@
- 	eor	dst, src, tmp
- #  define PTR_DEMANGLE(dst, src, tmp) PTR_MANGLE (dst, src, tmp)
- # else
-+#  include <stdint.h>
- extern uintptr_t __pointer_chk_guard_local attribute_relro attribute_hidden;
- #  define PTR_MANGLE(var) \
-   (var) = (__typeof (var)) ((uintptr_t) (var) ^ __pointer_chk_guard_local)
+	rm -f %@T.o $@.o
+	mv -f $@T $@
