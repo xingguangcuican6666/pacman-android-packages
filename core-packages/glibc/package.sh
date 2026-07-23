@@ -36,7 +36,7 @@ pacman_android_recipe_configure() {
       --host="$PACMAN_ANDROID_LIBRARY_TRIPLE" \
       --prefix="$PACMAN_ANDROID_PREFIX" \
       --sysconfdir="$PACMAN_ANDROID_SYSCONFDIR" \
-      --with-headers="$PACMAN_ANDROID_SYSROOT/usr/include" \
+      --with-headers="$PACMAN_ANDROID_SYSROOT_HEADERS_DIR" \
       --enable-kernel=3.2 \
       --disable-werror \
       "${PACMAN_ANDROID_PKG_EXTRA_CONFIGURE_ARGS[@]}"
