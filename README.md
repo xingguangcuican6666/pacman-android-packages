@@ -25,6 +25,7 @@ What already exists:
 - A repository skeleton for the new build system.
 - A builder container definition.
 - A minimal package builder and ALPM package emitter.
+- Local dependency bootstrap for repo-defined packages during target builds.
 - An example package recipe: `pacman-android-smoke`.
 - A target mapping layer for:
   - `x86_64`

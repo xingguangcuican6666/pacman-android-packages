@@ -59,12 +59,22 @@ find_recipe_dir() {
     if [[ ${#matches[@]} -gt 1 ]]; then
       echo "package reference is ambiguous: $package_ref" >&2
       printf '%s\n' "${matches[@]}" >&2
-      exit 1
+      return 2
     fi
   fi
 
   echo "package recipe not found for reference: $package_ref" >&2
-  exit 1
+  return 1
+}
+
+
+package_ref_from_recipe_dir() {
+  local recipe_dir="$1"
+  local collection package_name repo
+  collection="$(basename "$(dirname "$recipe_dir")")"
+  package_name="$(basename "$recipe_dir")"
+  repo="${collection%-packages}"
+  printf '%s/%s\n' "$repo" "$package_name"
 }
 
 
@@ -100,12 +110,24 @@ export PACMAN_ANDROID_STAGE_ROOT="$REPO_ROOT/out/stage/$PACKAGE_REPO/$PACKAGE_NA
 export PACMAN_ANDROID_ROOTFS_DIR="$PACMAN_ANDROID_STAGE_ROOT/rootfs"
 export PACMAN_ANDROID_METADATA_DIR="$PACMAN_ANDROID_STAGE_ROOT/metadata"
 export PACMAN_ANDROID_PACKAGE_DIR="$REPO_ROOT/out/packages/$PACKAGE_REPO/$TARGET"
+export PACMAN_ANDROID_DISTFILES_DIR="$REPO_ROOT/out/distfiles"
+export PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR="$PACMAN_ANDROID_BUILD_ROOT/deps-rootfs"
+export PACMAN_ANDROID_CANONICAL_PACKAGE_REF="$(package_ref_from_recipe_dir "$RECIPE_DIR")"
+export PACMAN_ANDROID_INSTALL_ROOT="$PACMAN_ANDROID_ROOTFS_DIR"
+export PACMAN_ANDROID_SRCDIR="$PACMAN_ANDROID_SOURCE_DIR"
+export PACMAN_ANDROID_PKGDIR="$PACMAN_ANDROID_ROOTFS_DIR"
+export PACMAN_ANDROID_STARTDIR="$REPO_ROOT"
+export PACMAN_ANDROID_BUILDDIR="$PACMAN_ANDROID_BUILD_DIR"
+export PACMAN_ANDROID_DISTDIR="$PACMAN_ANDROID_DISTFILES_DIR"
+export PACMAN_ANDROID_BUILD_STACK="${PACMAN_ANDROID_BUILD_STACK:+$PACMAN_ANDROID_BUILD_STACK }$PACMAN_ANDROID_CANONICAL_PACKAGE_REF"
 
 mkdir -p \
   "$PACMAN_ANDROID_BUILD_DIR" \
   "$PACMAN_ANDROID_ROOTFS_DIR" \
   "$PACMAN_ANDROID_METADATA_DIR" \
-  "$PACMAN_ANDROID_PACKAGE_DIR"
+  "$PACMAN_ANDROID_PACKAGE_DIR" \
+  "$PACMAN_ANDROID_DISTFILES_DIR" \
+  "$PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR"
 
 declare PACMAN_ANDROID_PKG_NAME=""
 declare PACMAN_ANDROID_PKG_VERSION=""
@@ -117,13 +139,14 @@ declare PACMAN_ANDROID_PKG_PACKAGER=""
 declare PACMAN_ANDROID_PKG_SRCURL=""
 declare PACMAN_ANDROID_PKG_SHA256=""
 declare PACMAN_ANDROID_PKG_SOURCE_FILENAME=""
-declare PACMAN_ANDROID_PKG_SOURCE_DIRNAME=""
 declare PACMAN_ANDROID_PKG_BUILD_SYSTEM="auto"
 declare PACMAN_ANDROID_PKG_MAKE_INSTALL_TARGET="install"
 declare -a PACMAN_ANDROID_PKG_LICENSES=()
 declare -a PACMAN_ANDROID_PKG_TARGETS=()
 declare -a PACMAN_ANDROID_PKG_DEPENDS=()
 declare -a PACMAN_ANDROID_PKG_MAKE_DEPENDS=()
+declare -a PACMAN_ANDROID_PKG_BUILD_DEPENDS=()
+declare -a PACMAN_ANDROID_PKG_RUN_DEPENDS=()
 declare -a PACMAN_ANDROID_PKG_CHECK_DEPENDS=()
 declare -a PACMAN_ANDROID_PKG_PROVIDES=()
 declare -a PACMAN_ANDROID_PKG_CONFLICTS=()
@@ -174,6 +197,26 @@ in_array() {
   return 1
 }
 
+
+append_unique_values() {
+  local array_name="$1"
+  shift
+  local -n target_array="$array_name"
+  local value
+  for value in "$@"; do
+    [[ -n "$value" ]] || continue
+    if ! in_array "$value" "${target_array[@]}"; then
+      target_array+=("$value")
+    fi
+  done
+}
+
+
+normalize_recipe_metadata() {
+  append_unique_values PACMAN_ANDROID_PKG_MAKE_DEPENDS "${PACMAN_ANDROID_PKG_BUILD_DEPENDS[@]}"
+  append_unique_values PACMAN_ANDROID_PKG_DEPENDS "${PACMAN_ANDROID_PKG_RUN_DEPENDS[@]}"
+}
+
 detect_packager() {
   if [[ -n "$PACMAN_ANDROID_PKG_PACKAGER" ]]; then
     printf '%s\n' "$PACMAN_ANDROID_PKG_PACKAGER"
@@ -201,50 +244,263 @@ write_repeated_entries() {
   done
 }
 
+normalize_recipe_metadata
+
+pacman_android_export_source_dirname() {
+  local source_worktree="${PACMAN_ANDROID_SOURCE_WORKTREE:-}"
+  [[ -n "$source_worktree" ]] || return 0
+
+  if [[ "$source_worktree" == "$PACMAN_ANDROID_SOURCE_DIR" ]]; then
+    export PACMAN_ANDROID_PKG_SOURCE_DIRNAME="."
+    return 0
+  fi
+
+  if [[ "$source_worktree" == "$PACMAN_ANDROID_SOURCE_DIR"/* ]]; then
+    export PACMAN_ANDROID_PKG_SOURCE_DIRNAME="${source_worktree#"$PACMAN_ANDROID_SOURCE_DIR"/}"
+    return 0
+  fi
+
+  export PACMAN_ANDROID_PKG_SOURCE_DIRNAME="$(basename "$source_worktree")"
+}
+
 prepare_default_source() {
   [[ -n "$PACMAN_ANDROID_PKG_SRCURL" ]] || return 0
 
   require_var PACMAN_ANDROID_PKG_SHA256
 
-  export PACMAN_ANDROID_DISTFILES_DIR="$PACMAN_ANDROID_REPO_ROOT/out/distfiles"
-
   mkdir -p "$PACMAN_ANDROID_DISTFILES_DIR" "$PACMAN_ANDROID_SOURCE_DIR"
 
-  local source_filename="${PACMAN_ANDROID_PKG_SOURCE_FILENAME:-$(basename "${PACMAN_ANDROID_PKG_SRCURL%%\?*}")}"
+  local source_filename
+  source_filename="${PACMAN_ANDROID_PKG_SOURCE_FILENAME:-$(basename "${PACMAN_ANDROID_PKG_SRCURL%%\?*}")}"
   export PACMAN_ANDROID_SOURCE_ARCHIVE="$PACMAN_ANDROID_DISTFILES_DIR/$source_filename"
+  download_and_verify_source_archive
 
-  if [[ ! -f "$PACMAN_ANDROID_SOURCE_ARCHIVE" ]]; then
-    curl \
-      --fail \
-      --location \
-      --retry 5 \
-      --retry-all-errors \
-      --output "$PACMAN_ANDROID_SOURCE_ARCHIVE" \
-      "$PACMAN_ANDROID_PKG_SRCURL"
-  fi
-
-  echo "${PACMAN_ANDROID_PKG_SHA256}  ${PACMAN_ANDROID_SOURCE_ARCHIVE}" | sha256sum --check --status
-
-  rm -rf \
-    "$PACMAN_ANDROID_SOURCE_DIR" \
-    "$PACMAN_ANDROID_CMAKE_BUILD_DIR" \
-    "$PACMAN_ANDROID_MESON_BUILD_DIR" \
-    "$PACMAN_ANDROID_AUTOTOOLS_BUILD_DIR" \
-    "$PACMAN_ANDROID_MESON_CROSS_FILE"
+  rm -rf "$PACMAN_ANDROID_SOURCE_DIR"
   mkdir -p "$PACMAN_ANDROID_SOURCE_DIR"
   bsdtar -xf "$PACMAN_ANDROID_SOURCE_ARCHIVE" -C "$PACMAN_ANDROID_SOURCE_DIR"
+  export PACMAN_ANDROID_SOURCE_WORKTREE
+  PACMAN_ANDROID_SOURCE_WORKTREE="$(resolve_source_worktree)"
+  export PACMAN_ANDROID_SOURCE_ROOT="$PACMAN_ANDROID_SOURCE_WORKTREE"
+  pacman_android_export_source_dirname
+}
 
-  local source_dirname="${PACMAN_ANDROID_PKG_SOURCE_DIRNAME:-$(bsdtar -tf "$PACMAN_ANDROID_SOURCE_ARCHIVE" | head -n1 | cut -d/ -f1)}"
-  if [[ -z "$source_dirname" ]]; then
-    echo "failed to infer source directory name from archive: $PACMAN_ANDROID_SOURCE_ARCHIVE" >&2
+
+sha256_file() {
+  sha256sum "$1" | cut -d' ' -f1
+}
+
+
+verify_source_archive_sha256() {
+  local archive_path="$1"
+  local actual_sha256
+  actual_sha256="$(sha256_file "$archive_path")"
+
+  if [[ "$actual_sha256" == "$PACMAN_ANDROID_PKG_SHA256" ]]; then
+    return 0
+  fi
+
+  echo "sha256 mismatch for source archive: $archive_path" >&2
+  echo "  url:      $PACMAN_ANDROID_PKG_SRCURL" >&2
+  echo "  expected: $PACMAN_ANDROID_PKG_SHA256" >&2
+  echo "  actual:   $actual_sha256" >&2
+  return 1
+}
+
+
+download_source_archive() {
+  local tmp_archive
+  tmp_archive="$(mktemp "$PACMAN_ANDROID_DISTFILES_DIR/.download.XXXXXX")"
+
+  if ! curl \
+    --fail \
+    --show-error \
+    --location \
+    --retry 5 \
+    --retry-all-errors \
+    --output "$tmp_archive" \
+    "$PACMAN_ANDROID_PKG_SRCURL"; then
+    rm -f "$tmp_archive"
+    echo "failed to download source archive: $PACMAN_ANDROID_PKG_SRCURL" >&2
     exit 1
   fi
 
-  export PACMAN_ANDROID_SOURCE_WORKTREE="$PACMAN_ANDROID_SOURCE_DIR/$source_dirname"
-  if [[ ! -d "$PACMAN_ANDROID_SOURCE_WORKTREE" ]]; then
-    echo "expected source worktree does not exist: $PACMAN_ANDROID_SOURCE_WORKTREE" >&2
+  mv "$tmp_archive" "$PACMAN_ANDROID_SOURCE_ARCHIVE"
+}
+
+
+download_and_verify_source_archive() {
+  if [[ -f "$PACMAN_ANDROID_SOURCE_ARCHIVE" ]] && verify_source_archive_sha256 "$PACMAN_ANDROID_SOURCE_ARCHIVE"; then
+    return 0
+  fi
+
+  if [[ -f "$PACMAN_ANDROID_SOURCE_ARCHIVE" ]]; then
+    echo "cached source archive is invalid, re-downloading: $PACMAN_ANDROID_SOURCE_ARCHIVE" >&2
+    rm -f "$PACMAN_ANDROID_SOURCE_ARCHIVE"
+  fi
+
+  download_source_archive
+
+  if ! verify_source_archive_sha256 "$PACMAN_ANDROID_SOURCE_ARCHIVE"; then
+    echo "refusing to continue with an invalid source archive" >&2
     exit 1
   fi
+}
+
+
+resolve_source_worktree() {
+  local -a top_level_dirs=()
+  local -a top_level_nondirs=()
+  mapfile -t top_level_dirs < <(find "$PACMAN_ANDROID_SOURCE_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%P\n' | sort)
+  mapfile -t top_level_nondirs < <(find "$PACMAN_ANDROID_SOURCE_DIR" -mindepth 1 -maxdepth 1 ! -type d -printf '%P\n' | sort)
+
+  if [[ ${#top_level_dirs[@]} -eq 0 && ${#top_level_nondirs[@]} -eq 0 ]]; then
+    echo "source archive extracted no files: $PACMAN_ANDROID_SOURCE_ARCHIVE" >&2
+    exit 1
+  fi
+
+  if [[ ${#top_level_dirs[@]} -eq 1 && ${#top_level_nondirs[@]} -eq 0 ]]; then
+    printf '%s\n' "$PACMAN_ANDROID_SOURCE_DIR/${top_level_dirs[0]}"
+    return 0
+  fi
+
+  printf '%s\n' "$PACMAN_ANDROID_SOURCE_DIR"
+}
+
+
+dependency_name_from_spec() {
+  local dependency="$1"
+  dependency="${dependency%%[<>=]*}"
+  dependency="${dependency%%:*}"
+  printf '%s\n' "$dependency"
+}
+
+
+query_package_metadata() {
+  local package_ref="$1"
+  local output
+  output="$(PACMAN_ANDROID_DRY_RUN=1 "$REPO_ROOT/build-package.sh" "$package_ref" "$TARGET")"
+
+  QUERY_PACKAGE_PATH=""
+  QUERY_RECIPE_PATH=""
+  QUERY_PACKAGE_CANONICAL_REF=""
+
+  local key value
+  while IFS='=' read -r key value; do
+    case "$key" in
+      package_path) QUERY_PACKAGE_PATH="$value" ;;
+      recipe) QUERY_RECIPE_PATH="$value" ;;
+      canonical_package_ref) QUERY_PACKAGE_CANONICAL_REF="$value" ;;
+    esac
+  done <<< "$output"
+
+  if [[ -z "$QUERY_PACKAGE_PATH" || -z "$QUERY_RECIPE_PATH" || -z "$QUERY_PACKAGE_CANONICAL_REF" ]]; then
+    echo "failed to query package metadata for dependency: $package_ref" >&2
+    echo "$output" >&2
+    exit 1
+  fi
+}
+
+
+dependency_package_is_current() {
+  local package_path="$1"
+  local recipe_path="$2"
+  local buildinfo_path="${package_path%.pkg.tar.zst}.BUILDINFO"
+
+  [[ -f "$package_path" && -f "$buildinfo_path" ]] || return 1
+
+  local recipe_sha256
+  recipe_sha256="$(sha256_file "$recipe_path")"
+  grep -Fqx "pkgbuild_sha256sum = $recipe_sha256" "$buildinfo_path"
+}
+
+
+ensure_local_dependency_package() {
+  local dependency_ref="$1"
+  query_package_metadata "$dependency_ref"
+
+  if dependency_package_is_current "$QUERY_PACKAGE_PATH" "$QUERY_RECIPE_PATH"; then
+    printf '%s\n' "$QUERY_PACKAGE_PATH"
+    return 0
+  fi
+
+  if in_array "$QUERY_PACKAGE_CANONICAL_REF" ${PACMAN_ANDROID_BUILD_STACK}; then
+    echo "detected a local dependency cycle while building $PACMAN_ANDROID_CANONICAL_PACKAGE_REF" >&2
+    echo "  cycle member: $QUERY_PACKAGE_CANONICAL_REF" >&2
+    echo "  build stack:  $PACMAN_ANDROID_BUILD_STACK" >&2
+    exit 1
+  fi
+
+  echo "building local dependency $QUERY_PACKAGE_CANONICAL_REF for target $TARGET" >&2
+
+  local build_output package_path
+  build_output="$("$REPO_ROOT/build-package.sh" "$QUERY_PACKAGE_CANONICAL_REF" "$TARGET")"
+  package_path="$(printf '%s\n' "$build_output" | tail -n1)"
+
+  if [[ ! -f "$package_path" ]]; then
+    echo "dependency build did not produce a package file: $QUERY_PACKAGE_CANONICAL_REF" >&2
+    echo "$build_output" >&2
+    exit 1
+  fi
+
+  printf '%s\n' "$package_path"
+}
+
+
+resolve_local_dependency_ref() {
+  local dependency_spec="$1"
+  local dependency_name recipe_dir find_status
+  dependency_name="$(dependency_name_from_spec "$dependency_spec")"
+  [[ -n "$dependency_name" ]] || return 1
+
+  recipe_dir="$(find_recipe_dir "$dependency_name" 2>/dev/null)" || find_status=$?
+  if [[ -n "${find_status:-}" ]]; then
+    if [[ "$find_status" == "2" ]]; then
+      echo "local dependency reference is ambiguous: $dependency_name" >&2
+      exit 1
+    fi
+    if [[ "$dependency_name" == */* ]]; then
+      echo "local dependency recipe not found: $dependency_name" >&2
+      exit 1
+    fi
+    return 1
+  fi
+
+  package_ref_from_recipe_dir "$recipe_dir"
+}
+
+
+bootstrap_local_dependencies() {
+  local -a dependency_specs=("${PACMAN_ANDROID_PKG_MAKE_DEPENDS[@]}" "${PACMAN_ANDROID_PKG_DEPENDS[@]}")
+  [[ ${#dependency_specs[@]} -gt 0 ]] || return 0
+
+  rm -rf "$PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR"
+  mkdir -p "$PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR"
+
+  local -a installed_refs=()
+  local dependency_spec dependency_ref package_path
+  for dependency_spec in "${dependency_specs[@]}"; do
+    dependency_ref="$(resolve_local_dependency_ref "$dependency_spec" || true)"
+    [[ -n "$dependency_ref" ]] || continue
+
+    if [[ "$dependency_ref" == "$PACMAN_ANDROID_CANONICAL_PACKAGE_REF" ]]; then
+      echo "package cannot depend on itself: $dependency_ref" >&2
+      exit 1
+    fi
+
+    if in_array "$dependency_ref" "${installed_refs[@]}"; then
+      continue
+    fi
+
+    package_path="$(ensure_local_dependency_package "$dependency_ref")"
+    echo "installing local dependency $(basename "$package_path") into $PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR" >&2
+    bsdtar -xf "$package_path" -C "$PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR"
+    rm -f \
+      "$PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR/.PKGINFO" \
+      "$PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR/.BUILDINFO" \
+      "$PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR/.MTREE"
+
+    installed_refs+=("$dependency_ref")
+  done
 }
 
 apply_recipe_patches() {
@@ -428,11 +684,14 @@ pacman_android_default_configure_cmake() {
     -DCMAKE_SHARED_LINKER_FLAGS="$LDFLAGS" \
     -DCMAKE_INSTALL_PREFIX="$PACMAN_ANDROID_PREFIX" \
     -DCMAKE_INSTALL_SYSCONFDIR="$PACMAN_ANDROID_SYSCONFDIR" \
-    -DCMAKE_FIND_ROOT_PATH="$PACMAN_ANDROID_SYSROOT" \
+    -DCMAKE_FIND_ROOT_PATH="$PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR;$PACMAN_ANDROID_SYSROOT" \
     -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
     -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
     -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY \
     -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY \
+    -DCMAKE_PREFIX_PATH="$PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR/usr" \
+    -DCMAKE_INCLUDE_PATH="$PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR/usr/include" \
+    -DCMAKE_LIBRARY_PATH="$PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR/usr/lib" \
     -DCMAKE_MAKE_PROGRAM="$(command -v ninja)" \
     -DANDROID_ABI="$PACMAN_ANDROID_ABI" \
     -DANDROID_PLATFORM="android-$PACMAN_ANDROID_API_LEVEL" \
@@ -581,16 +840,34 @@ export PACMAN_ANDROID_PKG_PACKAGER="$(detect_packager)"
 export PACMAN_ANDROID_PACKAGE_BASENAME="${PACMAN_ANDROID_PKG_NAME}-${PACMAN_ANDROID_PKG_FULL_VERSION}-${PACMAN_ANDROID_PACKAGE_ARCH}"
 export PACMAN_ANDROID_PACKAGE_PATH="$PACMAN_ANDROID_PACKAGE_DIR/${PACMAN_ANDROID_PACKAGE_BASENAME}.pkg.tar.zst"
 
-export PKG_CONFIG_LIBDIR="${PACMAN_ANDROID_ROOTFS_DIR}/usr/lib/pkgconfig:${PACMAN_ANDROID_ROOTFS_DIR}/usr/share/pkgconfig"
-export PKG_CONFIG_SYSROOT_DIR="$PACMAN_ROOTDIR"
+export PKG_CONFIG_LIBDIR="${PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR}/usr/lib/pkgconfig:${PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR}/usr/share/pkgconfig:${PACMAN_ANDROID_ROOTFS_DIR}/usr/lib/pkgconfig:${PACMAN_ANDROID_ROOTFS_DIR}/usr/share/pkgconfig"
+export PKG_CONFIG_SYSROOT_DIR="$PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR"
+export CPPFLAGS="-I${PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR}/usr/include${CPPFLAGS:+ $CPPFLAGS}"
+export LDFLAGS="-L${PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR}/usr/lib${LDFLAGS:+ $LDFLAGS}"
 
-rm -rf "$PACMAN_ANDROID_BUILD_DIR" "$PACMAN_ANDROID_ROOTFS_DIR" "$PACMAN_ANDROID_METADATA_DIR"
-mkdir -p "$PACMAN_ANDROID_BUILD_DIR" "$PACMAN_ANDROID_ROOTFS_DIR" "$PACMAN_ANDROID_METADATA_DIR" "$PACMAN_ANDROID_PACKAGE_DIR"
+rm -rf \
+  "$PACMAN_ANDROID_BUILD_DIR" \
+  "$PACMAN_ANDROID_SOURCE_DIR" \
+  "$PACMAN_ANDROID_CMAKE_BUILD_DIR" \
+  "$PACMAN_ANDROID_MESON_BUILD_DIR" \
+  "$PACMAN_ANDROID_AUTOTOOLS_BUILD_DIR" \
+  "$PACMAN_ANDROID_MESON_CROSS_FILE" \
+  "$PACMAN_ANDROID_ROOTFS_DIR" \
+  "$PACMAN_ANDROID_METADATA_DIR" \
+  "$PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR"
+mkdir -p \
+  "$PACMAN_ANDROID_BUILD_DIR" \
+  "$PACMAN_ANDROID_SOURCE_DIR" \
+  "$PACMAN_ANDROID_ROOTFS_DIR" \
+  "$PACMAN_ANDROID_METADATA_DIR" \
+  "$PACMAN_ANDROID_PACKAGE_DIR" \
+  "$PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR"
 
 if [[ "${PACMAN_ANDROID_DRY_RUN:-0}" == "1" ]]; then
   cat <<EOF
 package=$PACMAN_ANDROID_PKG_NAME
 package_ref=$PACMAN_ANDROID_PACKAGE_REF
+canonical_package_ref=$PACMAN_ANDROID_CANONICAL_PACKAGE_REF
 package_collection=$PACMAN_ANDROID_PACKAGE_COLLECTION
 package_repo=$PACMAN_ANDROID_PACKAGE_REPO
 target=$PACMAN_ANDROID_TARGET
@@ -602,13 +879,20 @@ recipe=$PACMAN_ANDROID_RECIPE_FILE
 package_path=$PACMAN_ANDROID_PACKAGE_PATH
 ndk_root=$PACMAN_ANDROID_NDK_ROOT
 rootdir=$PACMAN_ROOTDIR
+PACMAN_ANDROID_STARTDIR=$PACMAN_ANDROID_STARTDIR
+PACMAN_ANDROID_SRCDIR=$PACMAN_ANDROID_SRCDIR
+PACMAN_ANDROID_BUILDDIR=$PACMAN_ANDROID_BUILDDIR
+PACMAN_ANDROID_PKGDIR=$PACMAN_ANDROID_PKGDIR
+PACMAN_ANDROID_DISTDIR=$PACMAN_ANDROID_DISTDIR
 EOF
   exit 0
 fi
 
 prepare_default_source
+bootstrap_local_dependencies
 
 pacman_android_recipe_prepare
+pacman_android_export_source_dirname
 
 apply_recipe_patches
 
@@ -681,6 +965,7 @@ cp "$MTREE_FILE" "$PACMAN_ANDROID_PACKAGE_DIR/${PACMAN_ANDROID_PACKAGE_BASENAME}
 {
   printf 'package=%s\n' "$PACMAN_ANDROID_PKG_NAME"
   printf 'package_ref=%s\n' "$PACMAN_ANDROID_PACKAGE_REF"
+  printf 'canonical_package_ref=%s\n' "$PACMAN_ANDROID_CANONICAL_PACKAGE_REF"
   printf 'package_collection=%s\n' "$PACMAN_ANDROID_PACKAGE_COLLECTION"
   printf 'package_repo=%s\n' "$PACMAN_ANDROID_PACKAGE_REPO"
   printf 'target=%s\n' "$PACMAN_ANDROID_TARGET"

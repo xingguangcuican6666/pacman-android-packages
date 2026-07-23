@@ -163,6 +163,14 @@ jobs:
             vendor/android-ndk-r${{ env.ANDROID_NDK_VERSION }}-linux.zip
           key: ${{ runner.os }}-android-ndk-r${{ env.ANDROID_NDK_VERSION }}
 
+      - name: Restore source distfiles cache
+        uses: actions/cache@v6
+        with:
+          path: out/distfiles
+          key: ${{ runner.os }}-distfiles-${{ hashFiles('core-packages/**/package.sh', 'extra-packages/**/package.sh', 'multilib-packages/**/package.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-distfiles-
+
       - name: Build Android package
         run: |
           docker run --rm \

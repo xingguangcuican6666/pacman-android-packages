@@ -1,5 +1,8 @@
 # Package Builder
 
+API reference for `package.sh`: [package-script-api.md](package-script-api.md)
+`package.sh` 的 API 参考： [package-script-api.md](package-script-api.md)
+
 ## Goal
 
 The repository now includes a minimal package builder that can:
@@ -48,7 +51,6 @@ Common optional metadata:
 - `PACMAN_ANDROID_PKG_SRCURL`
 - `PACMAN_ANDROID_PKG_SHA256`
 - `PACMAN_ANDROID_PKG_SOURCE_FILENAME`
-- `PACMAN_ANDROID_PKG_SOURCE_DIRNAME`
 - `PACMAN_ANDROID_PKG_BUILD_SYSTEM`
 - `PACMAN_ANDROID_PKG_MAKE_INSTALL_TARGET`
 - `PACMAN_ANDROID_PKG_EXTRA_CONFIGURE_ARGS`
@@ -56,6 +58,9 @@ Common optional metadata:
 - `PACMAN_ANDROID_PKG_EXTRA_INSTALL_ARGS`
 - `PACMAN_ANDROID_PKG_TARGETS`
 - `PACMAN_ANDROID_PKG_DEPENDS`
+- `PACMAN_ANDROID_PKG_RUN_DEPENDS`
+- `PACMAN_ANDROID_PKG_MAKE_DEPENDS`
+- `PACMAN_ANDROID_PKG_BUILD_DEPENDS`
 - `PACMAN_ANDROID_PKG_PROVIDES`
 - `PACMAN_ANDROID_PKG_CONFLICTS`
 - `PACMAN_ANDROID_PKG_REPLACES`
@@ -102,16 +107,39 @@ If a recipe sets:
 the builder will automatically:
 
 1. download the archive into `out/distfiles/`
-2. verify the SHA256 checksum
-3. extract the source tree into the package build root
-4. export `PACMAN_ANDROID_SOURCE_WORKTREE`
+2. verify the SHA256 checksum with explicit expected/actual error output
+3. re-download a bad cached archive once instead of failing silently
+4. extract the source tree into the package build root
+5. auto-detect the real source worktree when the archive layout does not match a guessed dirname
+6. export `PACMAN_ANDROID_SOURCE_WORKTREE`
 
-Optional source-shape helpers:
+Optional source-shape helper:
 
 - `PACMAN_ANDROID_PKG_SOURCE_FILENAME`
-- `PACMAN_ANDROID_PKG_SOURCE_DIRNAME`
 
 If source metadata is not provided, recipes may still export `PACMAN_ANDROID_SOURCE_WORKTREE` manually from `pacman_android_recipe_prepare`.
+
+The builder populates `PACMAN_ANDROID_PKG_SOURCE_DIRNAME` after source extraction, and refreshes it again after `pacman_android_recipe_prepare` if the recipe sets `PACMAN_ANDROID_SOURCE_WORKTREE` manually.
+
+## Dependency Bootstrap
+
+Recipes may define target-package dependencies at the top of `package.sh` using either naming style:
+
+- `PACMAN_ANDROID_PKG_MAKE_DEPENDS`
+- `PACMAN_ANDROID_PKG_BUILD_DEPENDS`
+- `PACMAN_ANDROID_PKG_DEPENDS`
+- `PACMAN_ANDROID_PKG_RUN_DEPENDS`
+
+`*_BUILD_DEPENDS` is merged into `*_MAKE_DEPENDS`, and `*_RUN_DEPENDS` is merged into `*_DEPENDS`.
+
+Before `pacman_android_recipe_prepare`, the builder will:
+
+1. resolve any dependency that matches a local recipe in this repository
+2. build that dependency for the same Android target when needed
+3. extract the resulting package into an isolated dependency rootfs under `out/build/<repo>/<name>/<target>/deps-rootfs/`
+4. expose that dependency rootfs to `pkg-config`, compiler include search, linker library search, and default CMake discovery
+
+Dependency files are not merged into the final package staging rootfs.
 
 ## Patch Application
 
@@ -125,6 +153,26 @@ The builder expects the recipe to export one of:
 Optional:
 
 - `PACMAN_ANDROID_PATCH_STRIP_LEVEL`
+
+## Exported Path Variables
+
+The builder exports both repository-specific variables and package-path variables:
+
+- `PACMAN_ANDROID_SOURCE_DIR`
+- `PACMAN_ANDROID_SOURCE_WORKTREE`
+- `PACMAN_ANDROID_SOURCE_ROOT`
+- `PACMAN_ANDROID_PKG_SOURCE_DIRNAME`
+- `PACMAN_ANDROID_BUILD_DIR`
+- `PACMAN_ANDROID_STARTDIR`
+- `PACMAN_ANDROID_SRCDIR`
+- `PACMAN_ANDROID_BUILDDIR`
+- `PACMAN_ANDROID_PKGDIR`
+- `PACMAN_ANDROID_DISTDIR`
+- `PACMAN_ANDROID_ROOTFS_DIR`
+- `PACMAN_ANDROID_METADATA_DIR`
+- `PACMAN_ANDROID_PACKAGE_DIR`
+- `PACMAN_ANDROID_DISTFILES_DIR`
+- `PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR`
 
 ## Output Layout
 
