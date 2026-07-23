@@ -14,15 +14,81 @@ PACMAN_ANDROID_PKG_BUILD_SYSTEM="autotools"
 # a native compiler for build helpers, and it should not inherit package-wide
 # PIE link flags intended for executables.
 pacman_android_recipe_prepare() {
+  local -a glibc_common_cflags=()
+  local flag
+
+  for flag in $PACMAN_ANDROID_COMMON_CFLAGS; do
+    if [[ "$flag" == "-D__ANDROID_API__=$PACMAN_ANDROID_API_LEVEL" ]]; then
+      continue
+    fi
+    glibc_common_cflags+=("$flag")
+  done
+
   export BUILD_CC="${BUILD_CC:-$(command -v cc || command -v gcc)}"
-  export CFLAGS="$PACMAN_ANDROID_COMMON_CFLAGS -O2"
-  export CXXFLAGS="$PACMAN_ANDROID_COMMON_CFLAGS -O2"
+  export CFLAGS="${glibc_common_cflags[*]} -O2 -fno-emulated-tls -mno-outline-atomics"
+  export CXXFLAGS="${glibc_common_cflags[*]} -O2 -fno-emulated-tls -mno-outline-atomics"
   export LDFLAGS=""
+}
+
+pacman_android_glibc_android_fixups() {
+  local glibc_src="$PACMAN_ANDROID_SOURCE_WORKTREE"
+  local glibc_makefile="$glibc_src/elf/Makefile"
+  local pointer_guard="$glibc_src/sysdeps/unix/sysv/linux/aarch64/pointer_guard.h"
+  local system_property_stub="$glibc_src/elf/system-property-stub.c"
+
+  if ! grep -q '^#  include <stdint.h>$' "$pointer_guard"; then
+    perl -0pi -e 's@# else\n@# else\n#  include <stdint.h>\n@' "$pointer_guard"
+  fi
+
+  local awk_script
+  awk_script=$(cat <<'AWK'
+/rtld-csu \+=errno\.os/ { next }
+/rtld-elf \+=system-property-stub\.os/ { next }
+/rtld-misc \+=memfd_create\.os/ { next }
+/printf '%s\\n' 'rtld-csu \+=errno\.os' \\/ { next }
+{
+  print
+  if ($0 == "\tdone > $@T") {
+    print "\tprintf '%s\\n' 'rtld-csu +=errno.os' \\"
+    print "\t\t       'rtld-elf +=system-property-stub.os' >> $@T"
+  }
+}
+AWK
+)
+  awk "$awk_script" "$glibc_makefile" > "$glibc_makefile.new"
+  mv -f "$glibc_makefile.new" "$glibc_makefile"
+
+  cat > "$system_property_stub" <<'EOF'
+/* Android's NDK can inject Android-only symbols into rtld LTO output.
+   Provide local fallbacks so ld.so does not depend on bionic.  */
+
+#include <errno.h>
+
+int
+__system_property_get (const char *name, char *value)
+{
+  (void) name;
+  if (value != 0)
+    value[0] = '\0';
+
+  return 0;
+}
+
+int
+memfd_create (const char *name, unsigned int flags)
+{
+  (void) name;
+  (void) flags;
+  __set_errno (ENOSYS);
+  return -1;
+}
+EOF
 }
 
 
 pacman_android_recipe_configure() {
   pacman_android_require_source_worktree glibc
+  pacman_android_glibc_android_fixups
 
   rm -rf "$PACMAN_ANDROID_AUTOTOOLS_BUILD_DIR"
   mkdir -p "$PACMAN_ANDROID_AUTOTOOLS_BUILD_DIR"
@@ -43,6 +109,9 @@ pacman_android_recipe_configure() {
   mkdir -p "$libgcc_compat_dir"
   ln -s "$compiler_rt_builtins" "$libgcc_compat_dir/libgcc.a"
   export LDFLAGS="-L$libgcc_compat_dir"
+  cat > "$PACMAN_ANDROID_AUTOTOOLS_BUILD_DIR/configparms" <<'EOF'
+build-programs = no
+EOF
 
   (
     cd "$PACMAN_ANDROID_AUTOTOOLS_BUILD_DIR"

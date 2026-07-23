@@ -1,10 +1,40 @@
 --- a/elf/Makefile
 +++ b/elf/Makefile
-@@ -1511,7 +1511,7 @@ $(objpfx)librtld.map: $(objpfx)dl-allobjs.os $(common-objpfx)libc_pic.a
+@@ -1485,6 +1485,16 @@
+   free \
+   malloc \
+   realloc \
++  __GI___getcwd \
++  __libc_message_impl \
++  __GI___libc_fatal \
++  __libc_fatal \
++  __GI___sbrk \
++  __GI___memcpy_chk \
++  __GI___memmove_chk \
++  __libc_argc \
++  __libc_argv \
++  _dl_start \
+   # rtld-stubbed-symbols
+
+ ifeq (no,$(abort-in-ld))
+@@ -1514,7 +1519,7 @@
  	@-rm -f $@T
  	for symbol in $(rtld-stubbed-symbols); do \
 -		echo ".globl $$symbol"; \
 +		echo ".weak $$symbol"; \
  		echo "$$symbol:"; \
  	done | $(CC) -o $@T.o $(ASFLAGS) -c -x assembler -
- 	$(reloc-link) -o $@.o $@T.o '-Wl,-(' $^ -lgcc '-Wl,-)' -Wl,-Map,$@T
+-	$(reloc-link) -o $@.o $@T.o '-Wl,-(' $^ -lgcc '-Wl,-)' -Wl,-Map,$@T
++	$(reloc-link) -o $@.o $@T.o $(foreach symbol,$(rtld-stubbed-symbols),-Wl$(comma)--defsym=$(symbol)=0) '-Wl,-(' $^ -lgcc '-Wl,-)' -Wl,-Map,$@T
+ 	rm -f %@T.o $@.o
+ 	mv -f $@T $@
+--- a/sysdeps/unix/sysv/linux/aarch64/pointer_guard.h
++++ b/sysdeps/unix/sysv/linux/aarch64/pointer_guard.h
+@@ -30,6 +30,7 @@
+ 	eor	dst, src, tmp
+ #  define PTR_DEMANGLE(dst, src, tmp) PTR_MANGLE (dst, src, tmp)
+ # else
++#  include <stdint.h>
+ extern uintptr_t __pointer_chk_guard_local attribute_relro attribute_hidden;
+ #  define PTR_MANGLE(var) \
+   (var) = (__typeof (var)) ((uintptr_t) (var) ^ __pointer_chk_guard_local)
