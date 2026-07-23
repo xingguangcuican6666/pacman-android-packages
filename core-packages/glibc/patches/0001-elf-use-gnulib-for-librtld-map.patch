@@ -1,8 +1,6 @@
-diff --git a/elf/Makefile b/elf/Makefile
-index 3c698c2..b4cc982 100644
 --- a/elf/Makefile
 +++ b/elf/Makefile
-@@ -1511,7 +1511,7 @@ $(objpfx)librtld.map: $(objpfx)dl-allobjs.os $(common-objpfx)libc_pic.a
+@@ -1514,7 +1514,7 @@
  	for symbol in $(rtld-stubbed-symbols); do \
  		echo ".globl $$symbol"; \
  		echo "$$symbol:"; \
@@ -10,3 +8,4 @@ index 3c698c2..b4cc982 100644
 -	$(reloc-link) -o $@.o $@T.o '-Wl,-(' $^ -lgcc '-Wl,-)' -Wl,-Map,$@T
 +	$(reloc-link) -o $@.o $@T.o '-Wl,-(' $^ $(gnulib) '-Wl,-)' -Wl,-Map,$@T
  	rm -f %@T.o $@.o
+ 	mv -f $@T $@
