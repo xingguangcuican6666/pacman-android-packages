@@ -42,13 +42,10 @@ pacman_android_recipe_configure() {
   rm -rf "$libgcc_compat_dir"
   mkdir -p "$libgcc_compat_dir"
   ln -s "$compiler_rt_builtins" "$libgcc_compat_dir/libgcc.a"
+  export LDFLAGS="-L$libgcc_compat_dir"
 
   (
     cd "$PACMAN_ANDROID_AUTOTOOLS_BUILD_DIR"
-    cat > configparms <<EOF
-sysdep-LDFLAGS += -L$libgcc_compat_dir
-EOF
-
     bash "$PACMAN_ANDROID_SOURCE_WORKTREE/configure" \
       --build="$build_triple" \
       --host="$PACMAN_ANDROID_LIBRARY_TRIPLE" \
