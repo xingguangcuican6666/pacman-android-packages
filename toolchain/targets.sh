@@ -23,6 +23,7 @@ pacman_android_load_target() {
       export PACMAN_ANDROID_CLANG_TRIPLE="x86_64-linux-android"
       export PACMAN_ANDROID_CARGO_TRIPLE="x86_64-linux-android"
       export PACMAN_ANDROID_LIBRARY_TRIPLE="x86_64-linux-android"
+      export PACMAN_ANDROID_LINUX_ARCH="x86"
       export PACMAN_ANDROID_PACKAGE_ARCH="x86_64"
       ;;
     i686)
@@ -30,6 +31,7 @@ pacman_android_load_target() {
       export PACMAN_ANDROID_CLANG_TRIPLE="i686-linux-android"
       export PACMAN_ANDROID_CARGO_TRIPLE="i686-linux-android"
       export PACMAN_ANDROID_LIBRARY_TRIPLE="i686-linux-android"
+      export PACMAN_ANDROID_LINUX_ARCH="x86"
       export PACMAN_ANDROID_PACKAGE_ARCH="i686"
       ;;
     armhf)
@@ -37,6 +39,7 @@ pacman_android_load_target() {
       export PACMAN_ANDROID_CLANG_TRIPLE="armv7a-linux-androideabi"
       export PACMAN_ANDROID_CARGO_TRIPLE="armv7-linux-androideabi"
       export PACMAN_ANDROID_LIBRARY_TRIPLE="arm-linux-androideabi"
+      export PACMAN_ANDROID_LINUX_ARCH="arm"
       export PACMAN_ANDROID_PACKAGE_ARCH="armhf"
       ;;
     aarch64)
@@ -44,6 +47,7 @@ pacman_android_load_target() {
       export PACMAN_ANDROID_CLANG_TRIPLE="aarch64-linux-android"
       export PACMAN_ANDROID_CARGO_TRIPLE="aarch64-linux-android"
       export PACMAN_ANDROID_LIBRARY_TRIPLE="aarch64-linux-android"
+      export PACMAN_ANDROID_LINUX_ARCH="arm64"
       export PACMAN_ANDROID_PACKAGE_ARCH="aarch64"
       ;;
     *)
