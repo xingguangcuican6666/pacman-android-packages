@@ -28,10 +28,25 @@ pacman_android_recipe_configure() {
   mkdir -p "$PACMAN_ANDROID_AUTOTOOLS_BUILD_DIR"
 
   local build_triple
+  local compiler_rt_builtins
   build_triple="$(gcc -dumpmachine 2>/dev/null || cc -dumpmachine)"
+  compiler_rt_builtins="$("$CC" -rtlib=compiler-rt --print-libgcc-file-name)"
+
+  if [[ -z "$compiler_rt_builtins" || "$compiler_rt_builtins" == "libgcc.a" || ! -f "$compiler_rt_builtins" ]]; then
+    echo "failed to resolve compiler-rt builtins archive for glibc: $compiler_rt_builtins" >&2
+    exit 1
+  fi
 
   (
     cd "$PACMAN_ANDROID_AUTOTOOLS_BUILD_DIR"
+    cat > configparms <<EOF
+gnulib = $compiler_rt_builtins
+gnulib-tests = $compiler_rt_builtins
+static-gnulib = $compiler_rt_builtins
+static-gnulib-tests = $compiler_rt_builtins
+libc.so-gnulib = $compiler_rt_builtins
+EOF
+
     bash "$PACMAN_ANDROID_SOURCE_WORKTREE/configure" \
       --build="$build_triple" \
       --host="$PACMAN_ANDROID_LIBRARY_TRIPLE" \
