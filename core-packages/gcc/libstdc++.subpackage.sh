@@ -1,0 +1,7 @@
+PACMAN_ANDROID_SUBPKG_DESCRIPTION="C++ runtime libraries shipped by GCC"
+PACMAN_ANDROID_SUBPKG_DEPENDS=("glibc" "libgcc=${PACMAN_ANDROID_PKG_VERSION}-${PACMAN_ANDROID_PKG_REVERSION}")
+PACMAN_ANDROID_SUBPKG_PROVIDES=("libstdc++.so")
+PACMAN_ANDROID_SUBPKG_INCLUDE_PATTERNS=(
+  "usr/lib/libstdc++.so*"
+  "usr/share/locale/*/LC_MESSAGES/libstdc++.mo"
+)
