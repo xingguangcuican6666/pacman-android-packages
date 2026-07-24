@@ -20,6 +20,26 @@ This document lists the stable symbols exported by `builder/build-package.sh` in
 - `pacman_android_recipe_install`: Install into `PACMAN_ANDROID_ROOTFS_DIR`.
 - `pacman_android_recipe_post_install`: Final staging hook before packaging.
 
+## Subpackage Files / 子包文件
+
+Any file matching `*.subpackage.sh` in the recipe directory is sourced after the parent install step and before package emission.
+
+The filename minus `.subpackage.sh` becomes the output package name.
+
+Supported subpackage variables:
+
+- `PACMAN_ANDROID_SUBPKG_NAME`: Optional explicit package name override.
+- `PACMAN_ANDROID_SUBPKG_DESCRIPTION`: Required when the subpackage is emitted.
+- `PACMAN_ANDROID_SUBPKG_URL`: Optional URL override, defaults to the parent package URL.
+- `PACMAN_ANDROID_SUBPKG_LICENSES`: Optional Bash array, defaults to the parent package licenses.
+- `PACMAN_ANDROID_SUBPKG_DEPENDS`: Runtime dependency Bash array.
+- `PACMAN_ANDROID_SUBPKG_PROVIDES`: Provided package names Bash array.
+- `PACMAN_ANDROID_SUBPKG_CONFLICTS`: Conflicting package names Bash array.
+- `PACMAN_ANDROID_SUBPKG_REPLACES`: Replaced package names Bash array.
+- `PACMAN_ANDROID_SUBPKG_TARGETS`: Optional Bash array of supported targets.
+- `PACMAN_ANDROID_SUBPKG_INCLUDE_PATTERNS`: Bash array of glob patterns moved out of the parent install root.
+- `PACMAN_ANDROID_SUBPKG_ALLOW_EMPTY`: Set to `true` to emit an empty metadata-only package such as a meta package.
+
 ## Builder Helpers / 构建辅助函数
 
 These are the supported helpers recipes may call.
@@ -73,10 +93,12 @@ These are the supported helpers recipes may call.
 
 - `PACMAN_ANDROID_REPO_ROOT`: Repository root / 仓库根目录。
 - `PACMAN_ANDROID_PACKAGE_REF`: Requested package ref such as `core/glibc` / 请求的包引用。
+- `PACMAN_ANDROID_REQUESTED_PACKAGE_NAME`: Requested output package name, which may be a subpackage name such as `gcc-libs` / 请求的输出包名。
 - `PACMAN_ANDROID_CANONICAL_PACKAGE_REF`: Normalized `repo/name` package ref / 标准化后的 `repo/name` 引用。
 - `PACMAN_ANDROID_PACKAGE_COLLECTION`: Recipe collection directory such as `core-packages` / 配方集合目录。
 - `PACMAN_ANDROID_PACKAGE_REPO`: Collection repo name such as `core` / 仓库名。
 - `PACMAN_ANDROID_RECIPE_DIR`: Recipe directory / 配方目录。
+- `PACMAN_ANDROID_RECIPE_NAME`: Owning recipe directory name, which may differ from the requested output package name when subpackages are used / 拥有该输出包的配方目录名。
 - `PACMAN_ANDROID_RECIPE_FILE`: Recipe file path / 配方文件路径。
 - `PACMAN_ANDROID_BUILD_ROOT`: Root directory for one package and target build / 单包单目标的构建根目录。
 - `PACMAN_ANDROID_BUILD_DIR`: Generic build work directory / 通用构建工作目录。

@@ -37,6 +37,10 @@ Optional patch directory:
 
 - `<repo>-packages/<name>/patches/*.patch`
 
+Optional subpackage declarations:
+
+- `<repo>-packages/<name>/*.subpackage.sh`
+
 Required metadata variables:
 
 - `PACMAN_ANDROID_PKG_NAME`
@@ -74,6 +78,42 @@ Supported recipe functions:
 - `pacman_android_recipe_post_install`
 
 All recipe functions are optional. The builder now provides default `configure`, `build`, and `install` steps and only needs explicit recipe functions when a package deviates from the default pipeline.
+
+## Subpackages
+
+Recipes may declare additional output packages by adding sibling `*.subpackage.sh` files next to `package.sh`.
+
+The builder behavior is:
+
+1. build and install the parent recipe into the normal staging root
+2. evaluate each `*.subpackage.sh`
+3. move matching files from the parent staging root into a per-subpackage staging root
+4. emit one ALPM package per declared output package
+
+This is intentionally similar to Termux's split-package flow, but the package metadata and output layout remain repo-local.
+
+Each subpackage file may define:
+
+- `PACMAN_ANDROID_SUBPKG_DESCRIPTION`
+- `PACMAN_ANDROID_SUBPKG_LICENSES`
+- `PACMAN_ANDROID_SUBPKG_DEPENDS`
+- `PACMAN_ANDROID_SUBPKG_PROVIDES`
+- `PACMAN_ANDROID_SUBPKG_CONFLICTS`
+- `PACMAN_ANDROID_SUBPKG_REPLACES`
+- `PACMAN_ANDROID_SUBPKG_TARGETS`
+- `PACMAN_ANDROID_SUBPKG_INCLUDE_PATTERNS`
+- `PACMAN_ANDROID_SUBPKG_ALLOW_EMPTY`
+
+The filename controls the output package name. For example, `gcc-libs.subpackage.sh` emits package `gcc-libs`.
+
+Subpackages may also be addressed directly from the CLI:
+
+```bash
+./build-package.sh core/gcc-libs aarch64
+./build-package.sh core/libstdc++ aarch64
+```
+
+The owning recipe is still built once and all sibling packages for that recipe are emitted together.
 
 ## Default Build Pipeline
 
@@ -141,6 +181,8 @@ Before `pacman_android_recipe_prepare`, the builder will:
 
 Dependency files are not merged into the final package staging rootfs.
 
+If a dependency refers to a sibling subpackage from the same recipe, the builder does not recurse into a separate local build. The files are expected to come from the same parent recipe build.
+
 ## Patch Application
 
 If `<repo>-packages/<name>/patches/` exists, the builder applies all `*.patch` files in lexical order after `pacman_android_recipe_prepare` and before `pacman_android_recipe_configure`.
@@ -179,11 +221,13 @@ The builder exports both repository-specific variables and package-path variable
 For a package `<repo>/<name>` and target `<target>`:
 
 - build workdir:
-  - `out/build/<repo>/<name>/<target>/`
+  - `out/build/<repo>/<recipe>/<target>/`
 - staged filesystem:
-  - `out/stage/<repo>/<name>/<target>/rootfs/`
+  - `out/stage/<repo>/<recipe>/<target>/rootfs/`
 - package metadata:
-  - `out/stage/<repo>/<name>/<target>/metadata/`
+  - `out/stage/<repo>/<recipe>/<target>/metadata/`
+- subpackage staging roots:
+  - `out/stage/<repo>/<recipe>/<target>/packages/<subpackage>/`
 - final package outputs:
   - `out/packages/<repo>/<target>/`
 
