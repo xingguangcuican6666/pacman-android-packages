@@ -8,10 +8,10 @@ PACMAN_ANDROID_PKG_LICENSES=(
   "GPL-3.0-or-later WITH GCC-exception-3.1"
   "GFDL-1.3-or-later"
 )
-# GCC currently executes host-built compiler binaries during the recipe, so on
-# the current x86_64 CI runner only the x86_64 package can complete without a
-# foreign-arch userspace runner such as qemu-user.
-PACMAN_ANDROID_PKG_TARGETS=("x86_64")
+# GCC executes host-built compiler binaries during the recipe. The CI builder
+# image therefore provides qemu-user so foreign-arch host tools remain runnable
+# on the x86_64 GitHub Actions runner.
+PACMAN_ANDROID_PKG_TARGETS=("x86_64" "i686" "armhf" "aarch64")
 PACMAN_ANDROID_PKG_BUILD_DEPENDS=("core/glibc" "core/linux-api-headers")
 PACMAN_ANDROID_PKG_BUILD_SYSTEM="none"
 PACMAN_ANDROID_PKG_DEPENDS=("binutils" "glibc" "libasan=${PACMAN_ANDROID_PKG_VERSION}-${PACMAN_ANDROID_PKG_REVERSION}" "libgcc=${PACMAN_ANDROID_PKG_VERSION}-${PACMAN_ANDROID_PKG_REVERSION}" "libstdc++=${PACMAN_ANDROID_PKG_VERSION}-${PACMAN_ANDROID_PKG_REVERSION}" "libubsan=${PACMAN_ANDROID_PKG_VERSION}-${PACMAN_ANDROID_PKG_REVERSION}")
@@ -86,6 +86,26 @@ pacman_android_gcc_glibc_loader() {
     aarch64) printf '/lib/ld-linux-aarch64.so.1\n' ;;
     *)
       echo "unsupported target for glibc loader: $PACMAN_ANDROID_TARGET" >&2
+      exit 1
+      ;;
+  esac
+}
+
+pacman_android_gcc_target_exec_runner() {
+  case "$PACMAN_ANDROID_TARGET" in
+    x86_64)
+      ;;
+    i686)
+      printf '%s\n' qemu-i386
+      ;;
+    armhf)
+      printf '%s\n' qemu-arm
+      ;;
+    aarch64)
+      printf '%s\n' qemu-aarch64
+      ;;
+    *)
+      echo "unsupported target for exec runner: $PACMAN_ANDROID_TARGET" >&2
       exit 1
       ;;
   esac
@@ -202,7 +222,7 @@ pacman_android_gcc_disable_x86_64_android_libhwasan() {
 }
 
 pacman_android_gcc_write_host_wrappers() {
-  local wrapper_dir wrapper_include_dir target_wrapper_include_dir cc_wrapper cxx_wrapper crt_dir glibc_loader glibc_crt_dir host_libcxx_dir host_libcxx_include_dir ndk_generic_include_dir
+  local wrapper_dir wrapper_include_dir target_wrapper_include_dir cc_wrapper cxx_wrapper crt_dir glibc_loader glibc_crt_dir host_libcxx_dir host_libcxx_include_dir ndk_generic_include_dir target_exec_runner
   local target_cc_wrapper target_cxx_wrapper target_as_wrapper target_fortran_wrapper build_dir target_tooldir
   local host_locale_header
   local -a glibc_libdirs=()
@@ -226,6 +246,7 @@ pacman_android_gcc_write_host_wrappers() {
   host_libcxx_dir="$(pacman_android_gcc_host_libcxx_dir)"
   host_libcxx_include_dir="$(pacman_android_gcc_host_libcxx_include_dir)"
   ndk_generic_include_dir="$(pacman_android_gcc_ndk_generic_include_dir)"
+  target_exec_runner="$(pacman_android_gcc_target_exec_runner || true)"
   mapfile -t glibc_libdirs < <(pacman_android_gcc_glibc_libdirs)
 
   rm -rf "$wrapper_dir"
@@ -442,6 +463,8 @@ xgcc="$build_dir/gcc/xgcc"
 frontend="$build_dir/gcc/cc1"
 use_xgcc=0
 linking=1
+xgcc_runner="$target_exec_runner"
+xgcc_ld_prefix="$PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR"
 target_sysroot="$PACMAN_ANDROID_SYSROOT"
 target_crt_dir="$crt_dir"
 target_wrapper_include_dir="$target_wrapper_include_dir"
@@ -500,6 +523,21 @@ done
 if [[ -x "\$xgcc" && ( "\$use_xgcc" == "1" || -x "\$frontend" ) ]]; then
   if [[ "\$linking" == "1" ]]; then
     filtered_args+=(-static-libgcc)
+  fi
+
+  if [[ -n "\$xgcc_runner" ]]; then
+    if ! command -v "\$xgcc_runner" >/dev/null 2>&1; then
+      echo "\$(basename "\$0"): missing runner \$xgcc_runner for foreign-arch xgcc" >&2
+      exit 1
+    fi
+
+    exec "\$xgcc_runner" -L "\$xgcc_ld_prefix" "\$xgcc" \
+      -B"$build_dir/gcc/" \
+      -B"\$target_crt_dir/" \
+      --sysroot="\$target_sysroot" \
+      -isystem "\$target_wrapper_include_dir" \
+      -isystem "\$target_arch_include" \
+      "\${filtered_args[@]}"
   fi
 
   exec -a "\$(basename "\$0")" "\$xgcc" \
@@ -522,6 +560,8 @@ xgcc="$build_dir/gcc/xgcc"
 frontend="$build_dir/gcc/cc1plus"
 use_xgcc=0
 linking=1
+xgcc_runner="$target_exec_runner"
+xgcc_ld_prefix="$PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR"
 target_sysroot="$PACMAN_ANDROID_SYSROOT"
 target_crt_dir="$crt_dir"
 target_wrapper_include_dir="$target_wrapper_include_dir"
@@ -580,6 +620,21 @@ done
 if [[ -x "\$xgcc" && ( "\$use_xgcc" == "1" || -x "\$frontend" ) ]]; then
   if [[ "\$linking" == "1" ]]; then
     filtered_args+=(-static-libgcc)
+  fi
+
+  if [[ -n "\$xgcc_runner" ]]; then
+    if ! command -v "\$xgcc_runner" >/dev/null 2>&1; then
+      echo "\$(basename "\$0"): missing runner \$xgcc_runner for foreign-arch xgcc" >&2
+      exit 1
+    fi
+
+    exec "\$xgcc_runner" -L "\$xgcc_ld_prefix" "\$xgcc" \
+      -B"$build_dir/gcc/" \
+      -B"\$target_crt_dir/" \
+      --sysroot="\$target_sysroot" \
+      -isystem "\$target_wrapper_include_dir" \
+      -isystem "\$target_arch_include" \
+      "\${filtered_args[@]}"
   fi
 
   exec -a "\$(basename "\$0")" "\$xgcc" \
@@ -649,6 +704,8 @@ xgcc="$build_dir/gcc/xgcc"
 frontend="$build_dir/gcc/f951"
 use_xgcc=0
 linking=1
+xgcc_runner="$target_exec_runner"
+xgcc_ld_prefix="$PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR"
 target_sysroot="$PACMAN_ANDROID_SYSROOT"
 target_crt_dir="$crt_dir"
 target_wrapper_include_dir="$target_wrapper_include_dir"
@@ -707,6 +764,21 @@ done
 if [[ -x "\$xgcc" && ( "\$use_xgcc" == "1" || -x "\$frontend" ) ]]; then
   if [[ "\$linking" == "1" ]]; then
     filtered_args+=(-static-libgcc)
+  fi
+
+  if [[ -n "\$xgcc_runner" ]]; then
+    if ! command -v "\$xgcc_runner" >/dev/null 2>&1; then
+      echo "\$(basename "\$0"): missing runner \$xgcc_runner for foreign-arch xgcc" >&2
+      exit 1
+    fi
+
+    exec "\$xgcc_runner" -L "\$xgcc_ld_prefix" "\$xgcc" \
+      -B"$build_dir/gcc/" \
+      -B"\$target_crt_dir/" \
+      --sysroot="\$target_sysroot" \
+      -isystem "\$target_wrapper_include_dir" \
+      -isystem "\$target_arch_include" \
+      "\${filtered_args[@]}"
   fi
 
   exec -a "\$(basename "\$0")" "\$xgcc" \
