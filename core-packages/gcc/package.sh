@@ -479,6 +479,7 @@ preprocess_only=0
 dump_macros=0
 compile_only=0
 needs_gcc_driver=0
+assembly_source=0
 linking=1
 xgcc_runner="$target_exec_runner"
 xgcc_ld_prefix="$PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR"
@@ -541,6 +542,9 @@ for arg in "\$@"; do
     -fbuilding-libgcc)
       needs_gcc_driver=1
       ;;
+    *.s|*.S|*.asm)
+      assembly_source=1
+      ;;
     -lpthread)
       continue
       ;;
@@ -561,7 +565,7 @@ if [[ -x "\$xgcc" ]]; then
   # compile-to-assembly phases, but not for full object production where the
   # driver has to chain further host-side helper tools. Keep the native x86_64
   # target on the full xgcc path.
-  if [[ "\$use_xgcc" == "1" || "\$frontend_only" == "1" || ( "\$preprocess_only" == "1" && "\$dump_macros" == "1" ) || ( "\$needs_gcc_driver" == "1" && "\$compile_only" == "1" ) || ( -z "\$xgcc_runner" && -x "\$frontend" ) ]]; then
+  if [[ "\$use_xgcc" == "1" || "\$frontend_only" == "1" || ( "\$preprocess_only" == "1" && "\$dump_macros" == "1" ) || ( "\$needs_gcc_driver" == "1" && "\$compile_only" == "1" && "\$assembly_source" == "0" ) || ( -z "\$xgcc_runner" && -x "\$frontend" ) ]]; then
     if [[ "\$linking" == "1" ]]; then
       filtered_args+=(-static-libgcc)
     fi
