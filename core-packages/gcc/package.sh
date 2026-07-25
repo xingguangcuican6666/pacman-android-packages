@@ -16,7 +16,13 @@ PACMAN_ANDROID_GCC_GIT_URL="https://github.com/gcc-mirror/gcc.git"
 PACMAN_ANDROID_GCC_GIT_COMMIT="4e03491b401dce0658543dd90524ddb92063836e"
 
 case "$PACMAN_ANDROID_TARGET" in
-  x86_64|aarch64)
+  x86_64)
+    PACMAN_ANDROID_PKG_DEPENDS+=(
+      "liblsan=${PACMAN_ANDROID_PKG_VERSION}-${PACMAN_ANDROID_PKG_REVERSION}"
+      "libtsan=${PACMAN_ANDROID_PKG_VERSION}-${PACMAN_ANDROID_PKG_REVERSION}"
+    )
+    ;;
+  aarch64)
     PACMAN_ANDROID_PKG_DEPENDS+=(
       "libhwasan=${PACMAN_ANDROID_PKG_VERSION}-${PACMAN_ANDROID_PKG_REVERSION}"
       "liblsan=${PACMAN_ANDROID_PKG_VERSION}-${PACMAN_ANDROID_PKG_REVERSION}"
@@ -172,6 +178,24 @@ pacman_android_gcc_patch_libstdcxx_bionic_ctype_base() {
     s/\b_B\b/_CTYPE_B/g;
     s/\b_C\b/_CTYPE_C/g;
   ' "$ctype_base"
+}
+
+pacman_android_gcc_disable_x86_64_android_libhwasan() {
+  local configure_tgt
+  configure_tgt="$PACMAN_ANDROID_SOURCE_WORKTREE/libsanitizer/configure.tgt"
+
+  # x86_64 Android rejects ifunc, while upstream's generic x86_64-linux case
+  # enables HWASAN and builds hwasan_dynamic_shadow.cpp unconditionally.
+  if grep -F 'x86_64-*-linux-android*)' "$configure_tgt" >/dev/null; then
+    return 0
+  fi
+
+  perl -0pi -e 's@^  \Qx86_64-*-linux* | i?86-*-linux*)\E$@  x86_64-*-linux-android*)\n\tif test x\$ac_cv_sizeof_void_p = x8; then\n\t\tTSAN_SUPPORTED=yes\n\t\tLSAN_SUPPORTED=yes\n\t\tTSAN_TARGET_DEPENDENT_OBJECTS=tsan_rtl_amd64.lo\n\tfi\n\t;;\n$&@m' "$configure_tgt"
+
+  if ! grep -F 'x86_64-*-linux-android*)' "$configure_tgt" >/dev/null; then
+    echo "failed to patch libsanitizer/configure.tgt for x86_64 Android libhwasan" >&2
+    exit 1
+  fi
 }
 
 pacman_android_gcc_write_host_wrappers() {
@@ -455,6 +479,9 @@ for arg in "\$@"; do
     -c|-E|-S|-shared|-r)
       linking=0
       ;;
+    -lpthread)
+      continue
+      ;;
     --sysroot=*)
       continue
       ;;
@@ -531,6 +558,9 @@ for arg in "\$@"; do
       ;;
     -c|-E|-S|-shared|-r)
       linking=0
+      ;;
+    -lpthread)
+      continue
       ;;
     --sysroot=*)
       continue
@@ -655,6 +685,9 @@ for arg in "\$@"; do
       ;;
     -c|-E|-S|-shared|-r)
       linking=0
+      ;;
+    -lpthread)
+      continue
       ;;
     --sysroot=*)
       continue
@@ -798,6 +831,7 @@ pacman_android_recipe_prepare() {
   export PACMAN_ANDROID_SOURCE_ROOT="$gcc_source_dir"
   pacman_android_gcc_disable_libgfortran_caf_shmem
   pacman_android_gcc_patch_libstdcxx_bionic_ctype_base
+  pacman_android_gcc_disable_x86_64_android_libhwasan
 
   export BUILD_CC="${BUILD_CC:-$(command -v cc || command -v gcc)}"
   export BUILD_CXX="${BUILD_CXX:-$(command -v c++ || command -v g++)}"
