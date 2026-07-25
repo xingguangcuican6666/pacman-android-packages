@@ -810,10 +810,11 @@ EOF
 
 pacman_android_gcc_make_args() {
   local build_cflags="-O2"
-  local target_cflags target_ldflags
+  local target_cflags target_ldflags target_exec_runner
 
   target_cflags="-O2"
   target_ldflags=""
+  target_exec_runner="$(pacman_android_gcc_target_exec_runner || true)"
 
   PACMAN_ANDROID_GCC_MAKE_ARGS=(
     MAKEINFO=true
@@ -854,6 +855,15 @@ pacman_android_gcc_make_args() {
     "CXXFLAGS_FOR_TARGET=$target_cflags"
     "LDFLAGS_FOR_TARGET=$target_ldflags"
   )
+
+  # GCC's build-time selftests invoke the freshly built driver/frontend. When
+  # they must run under qemu-user for foreign-arch targets, they currently fail
+  # nondeterministically without emitting actionable diagnostics. Keep native
+  # x86_64 selftests enabled, but skip them for qemu-backed foreign targets so
+  # the actual toolchain/runtime build can proceed.
+  if [[ -n "$target_exec_runner" ]]; then
+    PACMAN_ANDROID_GCC_MAKE_ARGS+=("SELFTEST_TARGETS=")
+  fi
 }
 
 pacman_android_gcc_build_targets() {
