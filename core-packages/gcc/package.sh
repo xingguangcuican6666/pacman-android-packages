@@ -474,6 +474,7 @@ set -euo pipefail
 xgcc="$build_dir/gcc/xgcc"
 frontend="$build_dir/gcc/cc1"
 use_xgcc=0
+frontend_only=0
 linking=1
 xgcc_runner="$target_exec_runner"
 xgcc_ld_prefix="$PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR"
@@ -514,7 +515,11 @@ for arg in "\$@"; do
     -dumpspecs|-dumpmachine|-dumpfullversion|-dumpversion|-print-*|--print-*|--version|-v)
       use_xgcc=1
       ;;
-    -c|-E|-S|-shared|-r)
+    -E|-S)
+      frontend_only=1
+      linking=0
+      ;;
+    -c|-shared|-r)
       linking=0
       ;;
     -lpthread)
@@ -532,18 +537,32 @@ for arg in "\$@"; do
   filtered_args+=("\$arg")
 done
 
-if [[ -x "\$xgcc" && ( "\$use_xgcc" == "1" || -x "\$frontend" ) ]]; then
-  if [[ "\$linking" == "1" ]]; then
-    filtered_args+=(-static-libgcc)
-  fi
-
-  if [[ -n "\$xgcc_runner" ]]; then
-    if ! command -v "\$xgcc_runner" >/dev/null 2>&1; then
-      echo "\$(basename "\$0"): missing runner \$xgcc_runner for foreign-arch xgcc" >&2
-      exit 1
+if [[ -x "\$xgcc" ]]; then
+  # Foreign-arch xgcc under qemu is reliable for query, preprocess, and
+  # compile-to-assembly phases, but not for full object production where the
+  # driver has to chain further host-side helper tools. Keep the native x86_64
+  # target on the full xgcc path.
+  if [[ "\$use_xgcc" == "1" || "\$frontend_only" == "1" || ( -z "\$xgcc_runner" && -x "\$frontend" ) ]]; then
+    if [[ "\$linking" == "1" ]]; then
+      filtered_args+=(-static-libgcc)
     fi
 
-    exec "\$xgcc_runner" -L "\$xgcc_ld_prefix" "\$xgcc" \
+    if [[ -n "\$xgcc_runner" ]]; then
+      if ! command -v "\$xgcc_runner" >/dev/null 2>&1; then
+        echo "\$(basename "\$0"): missing runner \$xgcc_runner for foreign-arch xgcc" >&2
+        exit 1
+      fi
+
+      exec "\$xgcc_runner" -L "\$xgcc_ld_prefix" "\$xgcc" \
+        -B"$build_dir/gcc/" \
+        -B"\$target_crt_dir/" \
+        --sysroot="\$target_sysroot" \
+        -isystem "\$target_wrapper_include_dir" \
+        -isystem "\$target_arch_include" \
+        "\${filtered_args[@]}"
+    fi
+
+    exec -a "\$(basename "\$0")" "\$xgcc" \
       -B"$build_dir/gcc/" \
       -B"\$target_crt_dir/" \
       --sysroot="\$target_sysroot" \
@@ -551,17 +570,14 @@ if [[ -x "\$xgcc" && ( "\$use_xgcc" == "1" || -x "\$frontend" ) ]]; then
       -isystem "\$target_arch_include" \
       "\${filtered_args[@]}"
   fi
-
-  exec -a "\$(basename "\$0")" "\$xgcc" \
-    -B"$build_dir/gcc/" \
-    -B"\$target_crt_dir/" \
-    --sysroot="\$target_sysroot" \
-    -isystem "\$target_wrapper_include_dir" \
-    -isystem "\$target_arch_include" \
-    "\${filtered_args[@]}"
 fi
 
-exec "$PACMAN_ANDROID_CC" "\${filtered_args[@]}"
+exec "$PACMAN_ANDROID_CC" \
+  --sysroot="\$target_sysroot" \
+  -B"\$target_crt_dir/" \
+  -isystem "\$target_wrapper_include_dir" \
+  -isystem "\$target_arch_include" \
+  "\${filtered_args[@]}"
 EOF
 
 cat >"$target_cxx_wrapper" <<EOF
@@ -571,6 +587,7 @@ set -euo pipefail
 xgcc="$build_dir/gcc/xgcc"
 frontend="$build_dir/gcc/cc1plus"
 use_xgcc=0
+frontend_only=0
 linking=1
 xgcc_runner="$target_exec_runner"
 xgcc_ld_prefix="$PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR"
@@ -611,7 +628,11 @@ for arg in "\$@"; do
     -dumpspecs|-dumpmachine|-dumpfullversion|-dumpversion|-print-*|--print-*|--version|-v)
       use_xgcc=1
       ;;
-    -c|-E|-S|-shared|-r)
+    -E|-S)
+      frontend_only=1
+      linking=0
+      ;;
+    -c|-shared|-r)
       linking=0
       ;;
     -lpthread)
@@ -629,18 +650,28 @@ for arg in "\$@"; do
   filtered_args+=("\$arg")
 done
 
-if [[ -x "\$xgcc" && ( "\$use_xgcc" == "1" || -x "\$frontend" ) ]]; then
-  if [[ "\$linking" == "1" ]]; then
-    filtered_args+=(-static-libgcc)
-  fi
-
-  if [[ -n "\$xgcc_runner" ]]; then
-    if ! command -v "\$xgcc_runner" >/dev/null 2>&1; then
-      echo "\$(basename "\$0"): missing runner \$xgcc_runner for foreign-arch xgcc" >&2
-      exit 1
+if [[ -x "\$xgcc" ]]; then
+  if [[ "\$use_xgcc" == "1" || "\$frontend_only" == "1" || ( -z "\$xgcc_runner" && -x "\$frontend" ) ]]; then
+    if [[ "\$linking" == "1" ]]; then
+      filtered_args+=(-static-libgcc)
     fi
 
-    exec "\$xgcc_runner" -L "\$xgcc_ld_prefix" "\$xgcc" \
+    if [[ -n "\$xgcc_runner" ]]; then
+      if ! command -v "\$xgcc_runner" >/dev/null 2>&1; then
+        echo "\$(basename "\$0"): missing runner \$xgcc_runner for foreign-arch xgcc" >&2
+        exit 1
+      fi
+
+      exec "\$xgcc_runner" -L "\$xgcc_ld_prefix" "\$xgcc" \
+        -B"$build_dir/gcc/" \
+        -B"\$target_crt_dir/" \
+        --sysroot="\$target_sysroot" \
+        -isystem "\$target_wrapper_include_dir" \
+        -isystem "\$target_arch_include" \
+        "\${filtered_args[@]}"
+    fi
+
+    exec -a "\$(basename "\$0")" "\$xgcc" \
       -B"$build_dir/gcc/" \
       -B"\$target_crt_dir/" \
       --sysroot="\$target_sysroot" \
@@ -648,17 +679,21 @@ if [[ -x "\$xgcc" && ( "\$use_xgcc" == "1" || -x "\$frontend" ) ]]; then
       -isystem "\$target_arch_include" \
       "\${filtered_args[@]}"
   fi
-
-  exec -a "\$(basename "\$0")" "\$xgcc" \
-    -B"$build_dir/gcc/" \
-    -B"\$target_crt_dir/" \
-    --sysroot="\$target_sysroot" \
-    -isystem "\$target_wrapper_include_dir" \
-    -isystem "\$target_arch_include" \
-    "\${filtered_args[@]}"
 fi
 
-exec "$PACMAN_ANDROID_CXX" "\${filtered_args[@]}"
+clang_args=(
+  --sysroot="\$target_sysroot"
+  -B"\$target_crt_dir/"
+  -isystem "\$target_wrapper_include_dir"
+  -isystem "\$target_arch_include"
+  -nostdinc++
+)
+
+if [[ "\$linking" == "1" ]]; then
+  clang_args+=(-nostdlib++)
+fi
+
+exec "$PACMAN_ANDROID_CXX" "\${clang_args[@]}" "\${filtered_args[@]}"
 EOF
 
   cat >"$target_as_wrapper" <<EOF
