@@ -493,6 +493,15 @@ filtered_args=()
 fallback_args=()
 skip_next=0
 pending_isystem=0
+tmpdir=
+
+cleanup() {
+  if [[ -n "\${tmpdir}" ]]; then
+    rm -rf "\${tmpdir}"
+  fi
+}
+
+trap cleanup EXIT
 
 for arg in "\$@"; do
   if [[ "\$pending_isystem" == "1" ]]; then
@@ -565,6 +574,67 @@ if [[ -x "\$xgcc" ]]; then
   # compile-to-assembly phases, but not for full object production where the
   # driver has to chain further host-side helper tools. Keep the native x86_64
   # target on the full xgcc path.
+  if [[ "\$needs_gcc_driver" == "1" && "\$compile_only" == "1" && "\$assembly_source" == "0" && -n "\$xgcc_runner" ]]; then
+    target_output=
+    xgcc_args=()
+    skip_output_next=0
+
+    for arg in "\${filtered_args[@]}"; do
+      if [[ "\$skip_output_next" == "1" ]]; then
+        target_output="\$arg"
+        skip_output_next=0
+        continue
+      fi
+
+      case "\$arg" in
+        -c)
+          continue
+          ;;
+        -o)
+          skip_output_next=1
+          continue
+          ;;
+        -o*)
+          target_output="\${arg#-o}"
+          continue
+          ;;
+      esac
+
+      xgcc_args+=("\$arg")
+    done
+
+    if [[ -z "\$target_output" ]]; then
+      echo "\$(basename "\$0"): expected -o for foreign libgcc compile" >&2
+      exit 1
+    fi
+
+    if ! command -v "\$xgcc_runner" >/dev/null 2>&1; then
+      echo "\$(basename "\$0"): missing runner \$xgcc_runner for foreign-arch xgcc" >&2
+      exit 1
+    fi
+
+    tmpdir="\$(mktemp -d)"
+    asm_output="\$tmpdir/\$(basename "\$target_output").s"
+
+    "\$xgcc_runner" -L "\$xgcc_ld_prefix" "\$xgcc" \
+      -B"$build_dir/gcc/" \
+      -B"\$target_crt_dir/" \
+      --sysroot="\$target_sysroot" \
+      -isystem "\$target_wrapper_include_dir" \
+      -isystem "\$target_arch_include" \
+      -S \
+      "\${xgcc_args[@]}" \
+      -o "\$asm_output"
+
+    exec "$PACMAN_ANDROID_CC" \
+      --sysroot="\$target_sysroot" \
+      -B"\$target_crt_dir/" \
+      -isystem "\$target_wrapper_include_dir" \
+      -isystem "\$target_arch_include" \
+      -c "\$asm_output" \
+      -o "\$target_output"
+  fi
+
   if [[ "\$use_xgcc" == "1" || "\$frontend_only" == "1" || ( "\$preprocess_only" == "1" && "\$dump_macros" == "1" ) || ( "\$needs_gcc_driver" == "1" && "\$compile_only" == "1" && "\$assembly_source" == "0" ) || ( -z "\$xgcc_runner" && -x "\$frontend" ) ]]; then
     if [[ "\$linking" == "1" ]]; then
       filtered_args+=(-static-libgcc)
