@@ -649,13 +649,19 @@ if [[ -x "\$xgcc" ]]; then
       exit 1
     fi
 
+    source_basename="\$(basename "\$source_input")"
+
+    if [[ "\$source_basename" != "libgcc2.c" ]]; then
+      :
+    else
+
     if ! command -v "\$xgcc_runner" >/dev/null 2>&1; then
       echo "\$(basename "\$0"): missing runner \$xgcc_runner for foreign-arch xgcc" >&2
       exit 1
     fi
 
     tmpdir="\$(mktemp -d)"
-    preprocessed_output="\$tmpdir/\$(basename "\$target_output").i"
+    asm_output="\$tmpdir/\$(basename "\$target_output").s"
 
     "\$xgcc_runner" -L "\$xgcc_ld_prefix" "\$xgcc" \
       -B"$build_dir/gcc/" \
@@ -663,9 +669,9 @@ if [[ -x "\$xgcc" ]]; then
       --sysroot="\$target_sysroot" \
       -isystem "\$target_wrapper_include_dir" \
       -isystem "\$target_arch_include" \
-      -E \
+      -S \
       "\${xgcc_args[@]}" \
-      -o "\$preprocessed_output"
+      -o "\$asm_output"
 
     exec "$PACMAN_ANDROID_CC" \
       --sysroot="\$target_sysroot" \
@@ -673,11 +679,12 @@ if [[ -x "\$xgcc" ]]; then
       -isystem "\$target_wrapper_include_dir" \
       -isystem "\$target_arch_include" \
       "\${clang_compile_args[@]}" \
-      -c "\$preprocessed_output" \
+      -c "\$asm_output" \
       -o "\$target_output"
+    fi
   fi
 
-  if [[ "\$use_xgcc" == "1" || "\$frontend_only" == "1" || ( "\$preprocess_only" == "1" && "\$dump_macros" == "1" ) || ( "\$needs_gcc_driver" == "1" && "\$compile_only" == "1" && "\$assembly_source" == "0" ) || ( -z "\$xgcc_runner" && -x "\$frontend" ) ]]; then
+  if [[ "\$use_xgcc" == "1" || "\$frontend_only" == "1" || ( "\$preprocess_only" == "1" && "\$dump_macros" == "1" ) || ( -z "\$xgcc_runner" && -x "\$frontend" ) ]]; then
     if [[ "\$linking" == "1" ]]; then
       filtered_args+=(-static-libgcc)
     fi
