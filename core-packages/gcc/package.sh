@@ -475,6 +475,8 @@ xgcc="$build_dir/gcc/xgcc"
 frontend="$build_dir/gcc/cc1"
 use_xgcc=0
 frontend_only=0
+preprocess_only=0
+dump_macros=0
 linking=1
 xgcc_runner="$target_exec_runner"
 xgcc_ld_prefix="$PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR"
@@ -516,12 +518,19 @@ for arg in "\$@"; do
     -dumpspecs|-dumpmachine|-dumpfullversion|-dumpversion|-print-*|--print-*|--version|-v)
       use_xgcc=1
       ;;
-    -E|-S)
+    -S)
       frontend_only=1
+      linking=0
+      ;;
+    -E)
+      preprocess_only=1
       linking=0
       ;;
     -c|-shared|-r)
       linking=0
+      ;;
+    -dM|-dD)
+      dump_macros=1
       ;;
     -lpthread)
       continue
@@ -543,7 +552,7 @@ if [[ -x "\$xgcc" ]]; then
   # compile-to-assembly phases, but not for full object production where the
   # driver has to chain further host-side helper tools. Keep the native x86_64
   # target on the full xgcc path.
-  if [[ "\$use_xgcc" == "1" || "\$frontend_only" == "1" || ( -z "\$xgcc_runner" && -x "\$frontend" ) ]]; then
+  if [[ "\$use_xgcc" == "1" || "\$frontend_only" == "1" || ( "\$preprocess_only" == "1" && "\$dump_macros" == "1" ) || ( -z "\$xgcc_runner" && -x "\$frontend" ) ]]; then
     if [[ "\$linking" == "1" ]]; then
       filtered_args+=(-static-libgcc)
     fi
@@ -598,6 +607,8 @@ xgcc="$build_dir/gcc/xgcc"
 frontend="$build_dir/gcc/cc1plus"
 use_xgcc=0
 frontend_only=0
+preprocess_only=0
+dump_macros=0
 linking=1
 xgcc_runner="$target_exec_runner"
 xgcc_ld_prefix="$PACMAN_ANDROID_DEPENDENCY_ROOTFS_DIR"
@@ -639,12 +650,19 @@ for arg in "\$@"; do
     -dumpspecs|-dumpmachine|-dumpfullversion|-dumpversion|-print-*|--print-*|--version|-v)
       use_xgcc=1
       ;;
-    -E|-S)
+    -S)
       frontend_only=1
+      linking=0
+      ;;
+    -E)
+      preprocess_only=1
       linking=0
       ;;
     -c|-shared|-r)
       linking=0
+      ;;
+    -dM|-dD)
+      dump_macros=1
       ;;
     -lpthread)
       continue
@@ -662,7 +680,7 @@ for arg in "\$@"; do
 done
 
 if [[ -x "\$xgcc" ]]; then
-  if [[ "\$use_xgcc" == "1" || "\$frontend_only" == "1" || ( -z "\$xgcc_runner" && -x "\$frontend" ) ]]; then
+  if [[ "\$use_xgcc" == "1" || "\$frontend_only" == "1" || ( "\$preprocess_only" == "1" && "\$dump_macros" == "1" ) || ( -z "\$xgcc_runner" && -x "\$frontend" ) ]]; then
     if [[ "\$linking" == "1" ]]; then
       filtered_args+=(-static-libgcc)
     fi
