@@ -495,6 +495,7 @@ skip_next=0
 pending_isystem=0
 pending_xarg=0
 tmpdir=
+debug_libgcc=0
 
 cleanup() {
   if [[ -n "\${tmpdir}" ]]; then
@@ -650,6 +651,7 @@ if [[ -x "\$xgcc" ]]; then
     fi
 
     source_basename="\$(basename "\$source_input")"
+    debug_libgcc=1
 
     if [[ "\$source_basename" != "libgcc2.c" ]]; then
       :
@@ -663,7 +665,8 @@ if [[ -x "\$xgcc" ]]; then
     tmpdir="\$(mktemp -d)"
     asm_output="\$tmpdir/\$(basename "\$target_output").s"
 
-    "\$xgcc_runner" -L "\$xgcc_ld_prefix" "\$xgcc" \
+    echo "[DEBUG-libgcc] branch=xgcc-to-asm source=\$source_input output=\$target_output" >&2
+    if ! "\$xgcc_runner" -L "\$xgcc_ld_prefix" "\$xgcc" \
       -B"$build_dir/gcc/" \
       -B"\$target_crt_dir/" \
       --sysroot="\$target_sysroot" \
@@ -671,8 +674,13 @@ if [[ -x "\$xgcc" ]]; then
       -isystem "\$target_arch_include" \
       -S \
       "\${xgcc_args[@]}" \
-      -o "\$asm_output"
+      -o "\$asm_output"; then
+      status=$?
+      echo "[DEBUG-libgcc] xgcc-asm-exit=\$status source=\$source_input" >&2
+      exit "\$status"
+    fi
 
+    echo "[DEBUG-libgcc] branch=clang-from-asm source=\$asm_output output=\$target_output" >&2
     exec "$PACMAN_ANDROID_CC" \
       --sysroot="\$target_sysroot" \
       -B"\$target_crt_dir/" \
@@ -722,6 +730,10 @@ for arg in "\${filtered_args[@]}"; do
   esac
   fallback_args+=("\$arg")
 done
+
+if [[ "\$debug_libgcc" == "1" ]]; then
+  echo "[DEBUG-libgcc] branch=clang-fallback source=\$source_input output=\$target_output" >&2
+fi
 
 exec "$PACMAN_ANDROID_CC" \
   --sysroot="\$target_sysroot" \
