@@ -493,6 +493,7 @@ filtered_args=()
 fallback_args=()
 skip_next=0
 pending_isystem=0
+pending_xarg=0
 tmpdir=
 
 cleanup() {
@@ -515,6 +516,13 @@ for arg in "\$@"; do
         continue
         ;;
     esac
+  fi
+
+  if [[ "\$pending_xarg" == "1" ]]; then
+    pending_xarg=0
+    xgcc_args+=(-x "\$arg")
+    clang_compile_args+=(-x "\$arg")
+    continue
   fi
 
   if [[ "\$skip_next" == "1" ]]; then
@@ -576,13 +584,22 @@ if [[ -x "\$xgcc" ]]; then
   # target on the full xgcc path.
   if [[ "\$needs_gcc_driver" == "1" && "\$compile_only" == "1" && "\$assembly_source" == "0" && -n "\$xgcc_runner" ]]; then
     target_output=
+    source_input=
     xgcc_args=()
+    clang_compile_args=()
     skip_output_next=0
+    skip_dep_next=0
 
     for arg in "\${filtered_args[@]}"; do
       if [[ "\$skip_output_next" == "1" ]]; then
         target_output="\$arg"
         skip_output_next=0
+        continue
+      fi
+
+      if [[ "\$skip_dep_next" == "1" ]]; then
+        xgcc_args+=("\$arg")
+        skip_dep_next=0
         continue
       fi
 
@@ -598,13 +615,37 @@ if [[ -x "\$xgcc" ]]; then
           target_output="\${arg#-o}"
           continue
           ;;
+        -MD|-MMD|-MP)
+          xgcc_args+=("\$arg")
+          continue
+          ;;
+        -MF|-MT|-MQ)
+          xgcc_args+=("\$arg")
+          skip_dep_next=1
+          continue
+          ;;
+        -x)
+          pending_xarg=1
+          continue
+          ;;
+        -fbuilding-libgcc)
+          xgcc_args+=("\$arg")
+          continue
+          ;;
       esac
 
+      if [[ "\$arg" != -* ]]; then
+        source_input="\$arg"
+        xgcc_args+=("\$arg")
+        continue
+      fi
+
       xgcc_args+=("\$arg")
+      clang_compile_args+=("\$arg")
     done
 
-    if [[ -z "\$target_output" ]]; then
-      echo "\$(basename "\$0"): expected -o for foreign libgcc compile" >&2
+    if [[ -z "\$target_output" || -z "\$source_input" ]]; then
+      echo "\$(basename "\$0"): expected source input and -o for foreign libgcc compile" >&2
       exit 1
     fi
 
@@ -631,6 +672,7 @@ if [[ -x "\$xgcc" ]]; then
       -B"\$target_crt_dir/" \
       -isystem "\$target_wrapper_include_dir" \
       -isystem "\$target_arch_include" \
+      "\${clang_compile_args[@]}" \
       -c "\$preprocessed_output" \
       -o "\$target_output"
   fi
