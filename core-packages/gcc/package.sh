@@ -614,7 +614,7 @@ if [[ -x "\$xgcc" ]]; then
     fi
 
     tmpdir="\$(mktemp -d)"
-    asm_output="\$tmpdir/\$(basename "\$target_output").s"
+    preprocessed_output="\$tmpdir/\$(basename "\$target_output").i"
 
     "\$xgcc_runner" -L "\$xgcc_ld_prefix" "\$xgcc" \
       -B"$build_dir/gcc/" \
@@ -622,16 +622,16 @@ if [[ -x "\$xgcc" ]]; then
       --sysroot="\$target_sysroot" \
       -isystem "\$target_wrapper_include_dir" \
       -isystem "\$target_arch_include" \
-      -S \
+      -E \
       "\${xgcc_args[@]}" \
-      -o "\$asm_output"
+      -o "\$preprocessed_output"
 
     exec "$PACMAN_ANDROID_CC" \
       --sysroot="\$target_sysroot" \
       -B"\$target_crt_dir/" \
       -isystem "\$target_wrapper_include_dir" \
       -isystem "\$target_arch_include" \
-      -c "\$asm_output" \
+      -c "\$preprocessed_output" \
       -o "\$target_output"
   fi
 
