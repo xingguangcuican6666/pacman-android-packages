@@ -221,6 +221,18 @@ pacman_android_gcc_disable_x86_64_android_libhwasan() {
   fi
 }
 
+pacman_android_gcc_allow_skipping_foreign_selftests() {
+  local gcc_makefile_in
+  gcc_makefile_in="$PACMAN_ANDROID_SOURCE_WORKTREE/gcc/Makefile.in"
+
+  perl -0pi -e 's!SELFTEST_TARGETS = \@selftest_languages\@!ifdef PACMAN_ANDROID_SKIP_GCC_SELFTESTS\nSELFTEST_TARGETS =\nelse\nSELFTEST_TARGETS = \@selftest_languages\@\nendif!' "$gcc_makefile_in"
+
+  if ! grep -F 'ifdef PACMAN_ANDROID_SKIP_GCC_SELFTESTS' "$gcc_makefile_in" >/dev/null; then
+    echo "failed to patch gcc/Makefile.in for foreign selftest skipping" >&2
+    exit 1
+  fi
+}
+
 pacman_android_gcc_write_host_wrappers() {
   local wrapper_dir wrapper_include_dir target_wrapper_include_dir cc_wrapper cxx_wrapper crt_dir glibc_loader glibc_crt_dir host_libcxx_dir host_libcxx_include_dir ndk_generic_include_dir target_exec_runner
   local target_cc_wrapper target_cxx_wrapper target_as_wrapper target_fortran_wrapper build_dir target_tooldir
@@ -810,11 +822,10 @@ EOF
 
 pacman_android_gcc_make_args() {
   local build_cflags="-O2"
-  local target_cflags target_ldflags target_exec_runner
+  local target_cflags target_ldflags
 
   target_cflags="-O2"
   target_ldflags=""
-  target_exec_runner="$(pacman_android_gcc_target_exec_runner || true)"
 
   PACMAN_ANDROID_GCC_MAKE_ARGS=(
     MAKEINFO=true
@@ -855,15 +866,6 @@ pacman_android_gcc_make_args() {
     "CXXFLAGS_FOR_TARGET=$target_cflags"
     "LDFLAGS_FOR_TARGET=$target_ldflags"
   )
-
-  # GCC's build-time selftests invoke the freshly built driver/frontend. When
-  # they must run under qemu-user for foreign-arch targets, they currently fail
-  # nondeterministically without emitting actionable diagnostics. Keep native
-  # x86_64 selftests enabled, but skip them for qemu-backed foreign targets so
-  # the actual toolchain/runtime build can proceed.
-  if [[ -n "$target_exec_runner" ]]; then
-    PACMAN_ANDROID_GCC_MAKE_ARGS+=("SELFTEST_TARGETS=")
-  fi
 }
 
 pacman_android_gcc_build_targets() {
@@ -917,6 +919,7 @@ pacman_android_recipe_prepare() {
   pacman_android_gcc_disable_libgfortran_caf_shmem
   pacman_android_gcc_patch_libstdcxx_bionic_ctype_base
   pacman_android_gcc_disable_x86_64_android_libhwasan
+  pacman_android_gcc_allow_skipping_foreign_selftests
 
   export BUILD_CC="${BUILD_CC:-$(command -v cc || command -v gcc)}"
   export BUILD_CXX="${BUILD_CXX:-$(command -v c++ || command -v g++)}"
@@ -991,13 +994,21 @@ pacman_android_recipe_configure() {
 
 pacman_android_recipe_build() {
   local build_dir jobs
+  local target_exec_runner
   local -a make_args build_targets
 
   build_dir="$(pacman_android_gcc_build_dir)"
   jobs="$(pacman_android_build_jobs)"
+  target_exec_runner="$(pacman_android_gcc_target_exec_runner || true)"
   pacman_android_gcc_make_args
   make_args=("${PACMAN_ANDROID_GCC_MAKE_ARGS[@]}")
   mapfile -t build_targets < <(pacman_android_gcc_build_targets)
+
+  if [[ -n "$target_exec_runner" ]]; then
+    PACMAN_ANDROID_SKIP_GCC_SELFTESTS=1 \
+      make -C "$build_dir" -j "$jobs" "${make_args[@]}" "${build_targets[@]}"
+    return 0
+  fi
 
   make -C "$build_dir" -j "$jobs" "${make_args[@]}" "${build_targets[@]}"
 }
