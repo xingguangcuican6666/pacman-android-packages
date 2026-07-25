@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -63,6 +64,25 @@ def builder_path(path: str) -> bool:
 
 def active_package_exists(repo_root: Path, ref: dict) -> bool:
     return (repo_root / ref["collection"] / ref["package"] / "package.sh").is_file()
+
+
+def supported_targets_for_ref(ref: dict, repo_root: Path) -> list[str]:
+    recipe = repo_root / ref["collection"] / ref["package"] / "package.sh"
+    if not recipe.is_file():
+        return TARGETS
+
+    text = recipe.read_text(encoding="utf-8")
+    match = re.search(r"PACMAN_ANDROID_PKG_TARGETS=\(([^)]*)\)", text, re.S)
+    if not match:
+        return TARGETS
+
+    targets = re.findall(r'"([^"]+)"', match.group(1))
+    invalid_targets = [target for target in targets if target not in TARGETS]
+    if invalid_targets:
+        raise ValueError(
+            f"recipe declared unsupported targets for {ref['repo']}/{ref['package']}: {', '.join(invalid_targets)}"
+        )
+    return targets or TARGETS
 
 
 def parse_package_ref(raw: str, active_collections: list[str], repo_root: Path) -> dict:
@@ -163,11 +183,11 @@ def derive_refs_from_changes(records: list[dict], repo_root: Path) -> tuple[list
     return build_refs, removal_list, builder_changed
 
 
-def build_matrix(refs: list[dict]) -> list[dict]:
+def build_matrix(refs: list[dict], repo_root: Path) -> list[dict]:
     matrix = []
     for ref in refs:
         package_ref = f'{ref["repo"]}/{ref["package"]}'
-        for target in TARGETS:
+        for target in supported_targets_for_ref(ref, repo_root):
             matrix.append(
                 {
                     "package_ref": package_ref,
@@ -180,11 +200,11 @@ def build_matrix(refs: list[dict]) -> list[dict]:
     return matrix
 
 
-def write_outputs(path: str, refs: list[dict], removals: list[str], builder_changed: bool) -> None:
+def write_outputs(path: str, refs: list[dict], removals: list[str], builder_changed: bool, repo_root: Path) -> None:
     payload = {
         "has_packages": bool(refs),
         "packages": refs,
-        "matrix": build_matrix(refs),
+        "matrix": build_matrix(refs, repo_root),
         "remove_packages": removals,
         "has_removals": bool(removals),
         "builder_changed": builder_changed,
@@ -200,10 +220,10 @@ def write_outputs(path: str, refs: list[dict], removals: list[str], builder_chan
     Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def write_plan(path: str, refs: list[dict], removals: list[str], builder_changed: bool) -> None:
+def write_plan(path: str, refs: list[dict], removals: list[str], builder_changed: bool, repo_root: Path) -> None:
     plan = {
         "build_packages": refs,
-        "build_matrix": build_matrix(refs),
+        "build_matrix": build_matrix(refs, repo_root),
         "remove_packages": removals,
         "builder_changed": builder_changed,
     }
@@ -223,9 +243,9 @@ def main() -> None:
         refs, removals, builder_changed = derive_refs_from_changes(parse_change_records(list(sys.stdin)), repo_root)
 
     if args.github_output:
-        write_outputs(args.github_output, refs, removals, builder_changed)
+        write_outputs(args.github_output, refs, removals, builder_changed, repo_root)
     if args.plan_file:
-        write_plan(args.plan_file, refs, removals, builder_changed)
+        write_plan(args.plan_file, refs, removals, builder_changed, repo_root)
     if not args.github_output and not args.plan_file:
         print(
             json.dumps(
@@ -234,7 +254,7 @@ def main() -> None:
                     "has_removals": bool(removals),
                     "builder_changed": builder_changed,
                     "packages": refs,
-                    "matrix": build_matrix(refs),
+                    "matrix": build_matrix(refs, repo_root),
                     "remove_packages": removals,
                 },
                 separators=(",", ":"),

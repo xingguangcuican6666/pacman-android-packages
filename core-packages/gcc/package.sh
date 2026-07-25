@@ -8,7 +8,10 @@ PACMAN_ANDROID_PKG_LICENSES=(
   "GPL-3.0-or-later WITH GCC-exception-3.1"
   "GFDL-1.3-or-later"
 )
-PACMAN_ANDROID_PKG_TARGETS=("x86_64" "i686" "armhf" "aarch64")
+# GCC currently executes host-built compiler binaries during the recipe, so on
+# the current x86_64 CI runner only the x86_64 package can complete without a
+# foreign-arch userspace runner such as qemu-user.
+PACMAN_ANDROID_PKG_TARGETS=("x86_64")
 PACMAN_ANDROID_PKG_BUILD_DEPENDS=("core/glibc" "core/linux-api-headers")
 PACMAN_ANDROID_PKG_BUILD_SYSTEM="none"
 PACMAN_ANDROID_PKG_DEPENDS=("binutils" "glibc" "libasan=${PACMAN_ANDROID_PKG_VERSION}-${PACMAN_ANDROID_PKG_REVERSION}" "libgcc=${PACMAN_ANDROID_PKG_VERSION}-${PACMAN_ANDROID_PKG_REVERSION}" "libstdc++=${PACMAN_ANDROID_PKG_VERSION}-${PACMAN_ANDROID_PKG_REVERSION}" "libubsan=${PACMAN_ANDROID_PKG_VERSION}-${PACMAN_ANDROID_PKG_REVERSION}")
