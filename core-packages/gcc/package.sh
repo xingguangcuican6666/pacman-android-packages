@@ -485,6 +485,7 @@ target_arch_include="$PACMAN_ANDROID_SYSROOT/usr/include/$PACMAN_ANDROID_LIBRARY
 target_include="/usr/$PACMAN_ANDROID_LIBRARY_TRIPLE/include"
 target_sys_include="/usr/$PACMAN_ANDROID_LIBRARY_TRIPLE/sys-include"
 filtered_args=()
+fallback_args=()
 skip_next=0
 pending_isystem=0
 
@@ -572,12 +573,21 @@ if [[ -x "\$xgcc" ]]; then
   fi
 fi
 
+for arg in "\${filtered_args[@]}"; do
+  case "\$arg" in
+    -fbuilding-libgcc)
+      continue
+      ;;
+  esac
+  fallback_args+=("\$arg")
+done
+
 exec "$PACMAN_ANDROID_CC" \
   --sysroot="\$target_sysroot" \
   -B"\$target_crt_dir/" \
   -isystem "\$target_wrapper_include_dir" \
   -isystem "\$target_arch_include" \
-  "\${filtered_args[@]}"
+  "\${fallback_args[@]}"
 EOF
 
 cat >"$target_cxx_wrapper" <<EOF
@@ -598,6 +608,7 @@ target_arch_include="$PACMAN_ANDROID_SYSROOT/usr/include/$PACMAN_ANDROID_LIBRARY
 target_include="/usr/$PACMAN_ANDROID_LIBRARY_TRIPLE/include"
 target_sys_include="/usr/$PACMAN_ANDROID_LIBRARY_TRIPLE/sys-include"
 filtered_args=()
+fallback_args=()
 skip_next=0
 pending_isystem=0
 
@@ -681,6 +692,15 @@ if [[ -x "\$xgcc" ]]; then
   fi
 fi
 
+for arg in "\${filtered_args[@]}"; do
+  case "\$arg" in
+    -fbuilding-libgcc)
+      continue
+      ;;
+  esac
+  fallback_args+=("\$arg")
+done
+
 clang_args=(
   --sysroot="\$target_sysroot"
   -B"\$target_crt_dir/"
@@ -693,7 +713,7 @@ if [[ "\$linking" == "1" ]]; then
   clang_args+=(-nostdlib++)
 fi
 
-exec "$PACMAN_ANDROID_CXX" "\${clang_args[@]}" "\${filtered_args[@]}"
+exec "$PACMAN_ANDROID_CXX" "\${clang_args[@]}" "\${fallback_args[@]}"
 EOF
 
   cat >"$target_as_wrapper" <<EOF
