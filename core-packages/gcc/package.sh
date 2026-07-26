@@ -653,7 +653,7 @@ if [[ -x "\$xgcc" ]]; then
     source_basename="\$(basename "\$source_input")"
     debug_libgcc=1
 
-    if [[ "\$source_basename" != "libgcc2.c" ]]; then
+    if [[ "\$source_basename" != "libgcc2.c" && "\$source_basename" != "sfp-exceptions.c" && "\$source_input" != */soft-fp/* ]]; then
       :
     else
 
@@ -663,31 +663,33 @@ if [[ -x "\$xgcc" ]]; then
     fi
 
     tmpdir="\$(mktemp -d)"
-    asm_output="\$tmpdir/\$(basename "\$target_output").s"
+    preprocessed_output="\$tmpdir/\$(basename "\$target_output").i"
 
-    echo "[DEBUG-libgcc] branch=xgcc-to-asm source=\$source_input output=\$target_output" >&2
-    if ! "\$xgcc_runner" -L "\$xgcc_ld_prefix" "\$xgcc" \
+    echo "[DEBUG-libgcc] branch=xgcc-to-i source=\$source_input output=\$target_output" >&2
+    if "\$xgcc_runner" -L "\$xgcc_ld_prefix" "\$xgcc" \
       -B"$build_dir/gcc/" \
       -B"\$target_crt_dir/" \
       --sysroot="\$target_sysroot" \
       -isystem "\$target_wrapper_include_dir" \
       -isystem "\$target_arch_include" \
-      -S \
+      -E \
       "\${xgcc_args[@]}" \
-      -o "\$asm_output"; then
+      -o "\$preprocessed_output"; then
+      :
+    else
       status=$?
       echo "[DEBUG-libgcc] xgcc-asm-exit=\$status source=\$source_input" >&2
       exit "\$status"
     fi
 
-    echo "[DEBUG-libgcc] branch=clang-from-asm source=\$asm_output output=\$target_output" >&2
+    echo "[DEBUG-libgcc] branch=clang-from-i source=\$preprocessed_output output=\$target_output" >&2
     exec "$PACMAN_ANDROID_CC" \
       --sysroot="\$target_sysroot" \
       -B"\$target_crt_dir/" \
       -isystem "\$target_wrapper_include_dir" \
       -isystem "\$target_arch_include" \
       "\${clang_compile_args[@]}" \
-      -c "\$asm_output" \
+      -c "\$preprocessed_output" \
       -o "\$target_output"
     fi
   fi
