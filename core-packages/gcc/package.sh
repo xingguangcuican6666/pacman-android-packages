@@ -781,7 +781,7 @@ fi
 
 for arg in "\${filtered_args[@]}"; do
   case "\$arg" in
-    -fbuilding-libgcc)
+    -fbuilding-libgcc|-fno-link-libatomic)
       continue
       ;;
   esac
@@ -914,7 +914,7 @@ fi
 
 for arg in "\${filtered_args[@]}"; do
   case "\$arg" in
-    -fbuilding-libgcc)
+    -fbuilding-libgcc|-fno-link-libatomic)
       continue
       ;;
   esac
