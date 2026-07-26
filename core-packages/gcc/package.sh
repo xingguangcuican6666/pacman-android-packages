@@ -729,6 +729,13 @@ if [[ -x "\$xgcc" ]]; then
       exit "\$status"
     fi
 
+    # xgcc hand-writes unwind sections as "aw"; clang's integrated assembler
+    # predefines them read-only and rejects the flag mismatch.
+    sed -E -i \
+      -e 's/\\.section[[:space:]]+\\.eh_frame,\"aw\"/.section .eh_frame,\"a\"/g' \
+      -e 's/\\.section[[:space:]]+\\.gcc_except_table,\"aw\"/.section .gcc_except_table,\"a\"/g' \
+      "\$asm_output"
+
     echo "[DEBUG-libgcc] branch=clang-from-asm source=\$asm_output output=\$target_output" >&2
     exec "$PACMAN_ANDROID_CC" \
       --sysroot="\$target_sysroot" \
