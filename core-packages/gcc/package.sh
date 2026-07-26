@@ -633,7 +633,7 @@ if [[ -x "\$xgcc" ]]; then
           xgcc_args+=("\$arg")
           continue
           ;;
-        -fbuilding-libgcc)
+        -fbuilding-libgcc|-fno-link-libatomic|-fno-sync-libcalls)
           xgcc_args+=("\$arg")
           continue
           ;;
@@ -781,7 +781,7 @@ fi
 
 for arg in "\${filtered_args[@]}"; do
   case "\$arg" in
-    -fbuilding-libgcc|-fno-link-libatomic)
+    -fbuilding-libgcc|-fno-link-libatomic|-fno-sync-libcalls)
       continue
       ;;
   esac
@@ -914,7 +914,7 @@ fi
 
 for arg in "\${filtered_args[@]}"; do
   case "\$arg" in
-    -fbuilding-libgcc|-fno-link-libatomic)
+    -fbuilding-libgcc|-fno-link-libatomic|-fno-sync-libcalls)
       continue
       ;;
   esac
