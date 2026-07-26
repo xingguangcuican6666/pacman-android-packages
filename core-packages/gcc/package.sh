@@ -1268,6 +1268,20 @@ pacman_android_recipe_configure() {
   )
 }
 
+pacman_android_gcc_dump_failed_configure_logs() {
+  local build_dir dir
+  build_dir="$(pacman_android_gcc_build_dir)"
+
+  df -h "$build_dir" >&2 || true
+
+  for dir in "$build_dir/$PACMAN_ANDROID_LIBRARY_TRIPLE"/*; do
+    if [[ -f "$dir/config.log" && ! -f "$dir/config.status" ]]; then
+      echo "===== $dir/config.log (configure failed) =====" >&2
+      cat "$dir/config.log" >&2
+    fi
+  done
+}
+
 pacman_android_recipe_build() {
   local build_dir jobs
   local target_exec_runner
@@ -1282,11 +1296,13 @@ pacman_android_recipe_build() {
 
   if [[ -n "$target_exec_runner" ]]; then
     PACMAN_ANDROID_SKIP_GCC_SELFTESTS=1 \
-      make -C "$build_dir" -j "$jobs" "${make_args[@]}" "${build_targets[@]}"
+      make -C "$build_dir" -j "$jobs" "${make_args[@]}" "${build_targets[@]}" \
+      || { pacman_android_gcc_dump_failed_configure_logs; return 1; }
     return 0
   fi
 
-  make -C "$build_dir" -j "$jobs" "${make_args[@]}" "${build_targets[@]}"
+  make -C "$build_dir" -j "$jobs" "${make_args[@]}" "${build_targets[@]}" \
+    || { pacman_android_gcc_dump_failed_configure_logs; return 1; }
 }
 
 pacman_android_recipe_install() {
