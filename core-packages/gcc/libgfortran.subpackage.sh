@@ -1,0 +1,4 @@
+PACMAN_ANDROID_SUBPKG_DESCRIPTION="Fortran runtime libraries shipped by GCC"
+PACMAN_ANDROID_SUBPKG_DEPENDS=("glibc" "libgcc=${PACMAN_ANDROID_PKG_VERSION}-${PACMAN_ANDROID_PKG_REVERSION}")
+PACMAN_ANDROID_SUBPKG_PROVIDES=("libgfortran.so")
+PACMAN_ANDROID_SUBPKG_INCLUDE_PATTERNS=("usr/lib/libgfortran.a" "usr/lib/libgfortran.so*")

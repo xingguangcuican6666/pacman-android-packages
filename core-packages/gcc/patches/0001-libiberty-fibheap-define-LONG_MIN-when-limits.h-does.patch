@@ -1,0 +1,30 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: pacman-android-packages <noreply@example.com>
+Date: Fri, 24 Jul 2026 17:20:00 +0800
+Subject: [PATCH] libiberty: define LONG_{MIN,MAX} when limits.h does not
+
+---
+ libiberty/fibheap.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/libiberty/fibheap.c b/libiberty/fibheap.c
+index d0abc66ef84..e4f3b0b9cb3 100644
+--- a/libiberty/fibheap.c
++++ b/libiberty/fibheap.c
+@@ -30,6 +30,14 @@
+ #endif
+ #include "libiberty.h"
+ #include "fibheap.h"
++
++#ifndef LONG_MAX
++#define LONG_MAX __LONG_MAX__
++#endif
++
++#ifndef LONG_MIN
++#define LONG_MIN (-LONG_MAX - 1L)
++#endif
+ 
+ 
+ #define FIBHEAPKEY_MIN	LONG_MIN
+-- 
+2.0.0

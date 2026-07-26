@@ -1,0 +1,5 @@
+PACMAN_ANDROID_SUBPKG_DESCRIPTION="GCC __float128 runtime library"
+PACMAN_ANDROID_SUBPKG_DEPENDS=("glibc" "libgcc=${PACMAN_ANDROID_PKG_VERSION}-${PACMAN_ANDROID_PKG_REVERSION}")
+PACMAN_ANDROID_SUBPKG_PROVIDES=("libquadmath.so")
+PACMAN_ANDROID_SUBPKG_TARGETS=("x86_64" "i686")
+PACMAN_ANDROID_SUBPKG_INCLUDE_PATTERNS=("usr/lib/libquadmath.a" "usr/lib/libquadmath.so*" "usr/share/info/libquadmath.info*")

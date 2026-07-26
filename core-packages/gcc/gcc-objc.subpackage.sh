@@ -1,0 +1,12 @@
+_gcc_internal_libdir="usr/lib/gcc/${PACMAN_ANDROID_LIBRARY_TRIPLE}/${PACMAN_ANDROID_PKG_VERSION%%.*}"
+
+PACMAN_ANDROID_SUBPKG_DESCRIPTION="Objective-C front-end for GCC"
+PACMAN_ANDROID_SUBPKG_DEPENDS=(
+  "gcc=${PACMAN_ANDROID_PKG_VERSION}-${PACMAN_ANDROID_PKG_REVERSION}"
+  "libobjc=${PACMAN_ANDROID_PKG_VERSION}-${PACMAN_ANDROID_PKG_REVERSION}"
+  "glibc"
+)
+PACMAN_ANDROID_SUBPKG_INCLUDE_PATTERNS=(
+  "${_gcc_internal_libdir}/include/objc"
+  "${_gcc_internal_libdir}/cc1obj*"
+)

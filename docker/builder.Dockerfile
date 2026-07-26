@@ -46,6 +46,7 @@ RUN apt-get update \
         python3-venv \
         python3-setuptools \
         python3-wheel \
+        qemu-user \
         libssl-dev \
         zlib1g-dev \
         libffi-dev \
