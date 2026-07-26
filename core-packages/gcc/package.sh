@@ -629,6 +629,10 @@ if [[ -x "\$xgcc" ]]; then
           pending_xarg=1
           continue
           ;;
+        -finhibit-size-directive|-fno-toplevel-reorder)
+          xgcc_args+=("\$arg")
+          continue
+          ;;
         -fbuilding-libgcc)
           xgcc_args+=("\$arg")
           continue
@@ -656,7 +660,7 @@ if [[ -x "\$xgcc" ]]; then
 
     if [[ "\$source_basename" == "libgcc2.c" || "\$source_basename" == "sfp-exceptions.c" || "\$source_input" == */soft-fp/* ]]; then
       libgcc_stage1=preprocess
-    elif [[ "\$source_basename" == "strub.c" || "\$source_basename" == "libgcov-profiler.c" || "\$source_basename" == "libgcov-interface.c" || "\$source_basename" == "unwind-dw2.c" ]]; then
+    elif [[ "\$source_basename" == "strub.c" || "\$source_basename" == "libgcov-profiler.c" || "\$source_basename" == "libgcov-interface.c" || "\$source_basename" == "unwind-dw2.c" || "\$source_basename" == "crtstuff.c" ]]; then
       libgcc_stage1=assembly
     fi
 
