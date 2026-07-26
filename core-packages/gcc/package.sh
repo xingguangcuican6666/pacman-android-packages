@@ -659,7 +659,10 @@ if [[ -x "\$xgcc" ]]; then
     libgcc_stage1=
 
     if [[ "\$source_basename" == "libgcc2.c" || "\$source_basename" == "sfp-exceptions.c" || "\$source_input" == */soft-fp/* ]]; then
-      libgcc_stage1=preprocess
+      # Clang cannot compile xgcc-preprocessed output for these (C23 nullptr
+      # expansion, GCC-internal machine modes in libgcc2.h), so let xgcc carry
+      # them all the way to assembly and keep clang as the assembler only.
+      libgcc_stage1=assembly
     elif [[ "\$source_basename" == "strub.c" || "\$source_basename" == "libgcov-profiler.c" || "\$source_basename" == "libgcov-interface.c" || "\$source_basename" == "unwind-dw2.c" || "\$source_basename" == "crtstuff.c" ]]; then
       libgcc_stage1=assembly
     fi
