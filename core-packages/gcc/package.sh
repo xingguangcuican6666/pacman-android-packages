@@ -679,6 +679,7 @@ if [[ -x "\$xgcc" ]]; then
 
       echo "[DEBUG-libgcc] branch=xgcc-to-i source=\$source_input output=\$target_output" >&2
       if "\$xgcc_runner" -L "\$xgcc_ld_prefix" "\$xgcc" \
+      -wrapper "\$xgcc_runner,-L,\$xgcc_ld_prefix" \
         -B"$build_dir/gcc/" \
         -B"\$target_crt_dir/" \
         --sysroot="\$target_sysroot" \
@@ -689,7 +690,7 @@ if [[ -x "\$xgcc" ]]; then
         -o "\$preprocessed_output"; then
         :
       else
-        status=$?
+        status=\$?
         echo "[DEBUG-libgcc] xgcc-stage1-exit=\$status source=\$source_input mode=\$libgcc_stage1" >&2
         exit "\$status"
       fi
@@ -709,6 +710,7 @@ if [[ -x "\$xgcc" ]]; then
 
     echo "[DEBUG-libgcc] branch=xgcc-to-asm source=\$source_input output=\$target_output" >&2
     if "\$xgcc_runner" -L "\$xgcc_ld_prefix" "\$xgcc" \
+      -wrapper "\$xgcc_runner,-L,\$xgcc_ld_prefix" \
       -B"$build_dir/gcc/" \
       -B"\$target_crt_dir/" \
       --sysroot="\$target_sysroot" \
@@ -719,7 +721,7 @@ if [[ -x "\$xgcc" ]]; then
       -o "\$asm_output"; then
       :
     else
-      status=$?
+      status=\$?
       echo "[DEBUG-libgcc] xgcc-stage1-exit=\$status source=\$source_input mode=\$libgcc_stage1" >&2
       exit "\$status"
     fi
@@ -748,6 +750,7 @@ if [[ -x "\$xgcc" ]]; then
       fi
 
       exec "\$xgcc_runner" -L "\$xgcc_ld_prefix" "\$xgcc" \
+      -wrapper "\$xgcc_runner,-L,\$xgcc_ld_prefix" \
         -B"$build_dir/gcc/" \
         -B"\$target_crt_dir/" \
         --sysroot="\$target_sysroot" \
@@ -880,6 +883,7 @@ if [[ -x "\$xgcc" ]]; then
       fi
 
       exec "\$xgcc_runner" -L "\$xgcc_ld_prefix" "\$xgcc" \
+      -wrapper "\$xgcc_runner,-L,\$xgcc_ld_prefix" \
         -B"$build_dir/gcc/" \
         -B"\$target_crt_dir/" \
         --sysroot="\$target_sysroot" \
@@ -1046,6 +1050,7 @@ if [[ -x "\$xgcc" && ( "\$use_xgcc" == "1" || -x "\$frontend" ) ]]; then
     fi
 
     exec "\$xgcc_runner" -L "\$xgcc_ld_prefix" "\$xgcc" \
+      -wrapper "\$xgcc_runner,-L,\$xgcc_ld_prefix" \
       -B"$build_dir/gcc/" \
       -B"\$target_crt_dir/" \
       --sysroot="\$target_sysroot" \
